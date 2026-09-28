@@ -119,6 +119,36 @@ export class CommandPalette {
         title: 'Toggle Dark / Light Theme',
         subtitle: 'Switch between Obsidian Bloomberg dark mode and clean studio light mode',
         handler: () => this.store.toggleTheme()
+      },
+      {
+        id: 'toggle-pane-left',
+        category: 'Action',
+        title: 'Toggle Left Panel (Specs & Parameters)',
+        subtitle: 'Expand or collapse the property and loan parameters panel',
+        shortcut: '[',
+        handler: () => this.store.toggleLeftPane()
+      },
+      {
+        id: 'toggle-pane-right',
+        category: 'Action',
+        title: 'Toggle Right Panel (AI Copilot & Milestones)',
+        subtitle: 'Expand or collapse the AI Copilot and financial milestones panel',
+        shortcut: ']',
+        handler: () => this.store.toggleRightPane()
+      },
+      {
+        id: 'expand-all-panes',
+        category: 'Action',
+        title: 'Expand All Panels (Full Studio View)',
+        subtitle: 'Restore both Left Specs and Right Copilot panels simultaneously',
+        handler: () => this.store.expandAllPanes()
+      },
+      {
+        id: 'collapse-all-panes',
+        category: 'Action',
+        title: 'Collapse All Panels (Zen / Focus Mode)',
+        subtitle: 'Maximize the central canvas for high-focus strategy modeling',
+        handler: () => this.store.collapseAllPanes()
       }
     ];
   }

@@ -39,6 +39,20 @@
 
       <!-- Action Buttons -->
       <div class="studio-header-actions">
+        <!-- Workspace Panel Toggles -->
+        <div class="header-pane-toggles" role="group" aria-label="Toggle Side Panels">
+          <button id="btn-header-toggle-left" class="studio-btn small pane-toggle-nav-btn active" title="Toggle Loan Specs & Parameters ([)" aria-label="Toggle Parameters Panel ([)" aria-pressed="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></svg>
+            <span class="pane-toggle-text">Specs</span>
+            <kbd class="pane-nav-kbd">[</kbd>
+          </button>
+          <button id="btn-header-toggle-right" class="studio-btn small pane-toggle-nav-btn active" title="Toggle AI Copilot & Milestones (])" aria-label="Toggle Copilot Panel (])" aria-pressed="true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></svg>
+            <span class="pane-toggle-text">Copilot</span>
+            <kbd class="pane-nav-kbd">]</kbd>
+          </button>
+        </div>
+
         <button id="btn-command-palette" class="studio-btn" title="Command Palette (Cmd/Ctrl + K)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <span class="hide-mobile">Command</span>
@@ -56,6 +70,13 @@
 
     <!-- Workspace -->
     <main class="studio-workspace">
+      <!-- Left Edge Floating Restore Tab (shown when left panel is collapsed) -->
+      <button id="btn-restore-pane-left" class="pane-restore-tab left" title="Expand Parameters Panel ([)" aria-label="Expand Parameters Panel ([)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+        <span class="pane-restore-label">Specs</span>
+        <kbd class="pane-restore-kbd">[</kbd>
+      </button>
+
       <!-- Left Pane (Collapsible Loan Specs & Parameters) -->
       <aside class="studio-pane studio-pane-left" id="left-pane">
         <div class="studio-card">
@@ -64,7 +85,10 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
               <span>Property & Loan Specs</span>
             </div>
-            <button class="studio-btn small" id="toggle-pane-left" title="Collapse Panel ([)">[</button>
+            <button class="studio-btn small pane-card-toggle" id="toggle-pane-left" title="Collapse Panel ([)" aria-label="Collapse Left Panel">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+              <kbd class="pane-kbd-badge">[</kbd>
+            </button>
           </div>
 
           <div class="form-group">
@@ -423,7 +447,10 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
               <span>AI Financial Copilot</span>
             </div>
-            <button class="studio-btn small" id="toggle-pane-right" title="Collapse Panel (])">]</button>
+            <button class="studio-btn small pane-card-toggle" id="toggle-pane-right" title="Collapse Panel (])" aria-label="Collapse Right Panel">
+              <kbd class="pane-kbd-badge">]</kbd>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
           </div>
           <div id="copilot-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
         </div>
@@ -439,6 +466,13 @@
           <div id="milestones-container" class="milestone-highway"></div>
         </div>
       </aside>
+
+      <!-- Right Edge Floating Restore Tab (shown when right panel is collapsed) -->
+      <button id="btn-restore-pane-right" class="pane-restore-tab right" title="Expand AI Copilot & Milestones (])" aria-label="Expand AI Copilot & Milestones (])">
+        <kbd class="pane-restore-kbd">]</kbd>
+        <span class="pane-restore-label">Copilot</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
     </main>
 
     <!-- Mobile Sticky Bottom Action Dock -->

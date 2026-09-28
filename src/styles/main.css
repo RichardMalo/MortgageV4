@@ -220,11 +220,18 @@ body {
   display: flex;
   height: calc(100vh - var(--header-height));
   overflow: hidden;
+  position: relative;
 }
 
 .studio-pane {
   overflow-y: auto;
-  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.3s ease;
+  overflow-x: hidden;
+  transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              padding 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.25s ease,
+              opacity 0.25s ease;
+  will-change: width, padding;
+  box-sizing: border-box;
 }
 
 .studio-pane-left {
@@ -239,10 +246,13 @@ body {
 }
 
 .studio-pane-left.collapsed {
-  width: 0;
-  padding: 0;
-  border: none;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-right-color: transparent !important;
   visibility: hidden;
+  pointer-events: none;
 }
 
 .studio-canvas-center {
@@ -252,6 +262,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  position: relative;
 }
 
 .studio-pane-right {
@@ -266,10 +277,178 @@ body {
 }
 
 .studio-pane-right.collapsed {
-  width: 0;
-  padding: 0;
-  border: none;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  border-left-color: transparent !important;
   visibility: hidden;
+  pointer-events: none;
+}
+
+/* Header Panel Toggles */
+.header-pane-toggles {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 2px 3px;
+}
+
+.pane-toggle-nav-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.pane-toggle-nav-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+  border-color: var(--border-color);
+}
+
+.pane-toggle-nav-btn.active {
+  background: var(--card-bg);
+  color: var(--accent-cyan);
+  border-color: rgba(56, 189, 248, 0.3);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.pane-toggle-nav-btn.collapsed {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+.pane-toggle-nav-btn.collapsed:hover {
+  opacity: 1;
+  color: var(--accent-cyan);
+  border-color: rgba(56, 189, 248, 0.4);
+}
+
+.pane-nav-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  opacity: 0.75;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1px 4px;
+  border-radius: 3px;
+  border: 1px solid var(--border-color);
+}
+
+/* Floating Edge Restore Tabs (Always visible when a panel is collapsed) */
+.pane-restore-tab {
+  position: absolute;
+  top: 14px;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--card-bg);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+  pointer-events: none;
+  opacity: 0;
+  transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1),
+              opacity 0.22s ease,
+              background-color 0.2s,
+              border-color 0.2s,
+              box-shadow 0.2s,
+              color 0.2s;
+  user-select: none;
+}
+
+.pane-restore-tab.left {
+  left: 0;
+  border-left: none;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  transform: translateX(-100%);
+  box-shadow: 2px 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.pane-restore-tab.right {
+  right: 0;
+  border-right: none;
+  border-radius: var(--radius-md) 0 0 var(--radius-md);
+  transform: translateX(100%);
+  box-shadow: -2px 4px 16px rgba(0, 0, 0, 0.45);
+}
+
+.pane-restore-tab.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.pane-restore-tab:hover {
+  background: var(--bg-surface-hover);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 18px rgba(56, 189, 248, 0.35);
+}
+
+.pane-restore-tab.left.visible:hover {
+  transform: translateX(3px);
+}
+
+.pane-restore-tab.right.visible:hover {
+  transform: translateX(-3px);
+}
+
+.pane-restore-label {
+  letter-spacing: -0.2px;
+}
+
+.pane-restore-kbd {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--accent-cyan);
+}
+
+/* In-Card Pane Collapse Buttons */
+.pane-card-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+}
+
+.pane-card-toggle:hover {
+  color: var(--accent-cyan);
+  border-color: var(--accent-cyan);
+  background: var(--bg-surface-hover);
+}
+
+.pane-kbd-badge {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent-cyan);
 }
 
 /* Section Cards & Form Controls */
@@ -856,8 +1035,9 @@ body {
 
 /* Responsive Breakpoints (< 768px) */
 @media (max-width: 768px) {
-  .studio-pane-left, .studio-pane-right {
-    display: none;
+  .studio-pane-left, .studio-pane-right,
+  .pane-restore-tab, .header-pane-toggles {
+    display: none !important;
   }
 
   .studio-stage-tabs {

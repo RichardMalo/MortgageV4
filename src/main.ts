@@ -53,6 +53,7 @@ class StudioApp {
     this.store.applyTheme();
     this.initComponents();
     this.bindEvents();
+    this.syncPaneCollapse(this.store.getState());
     this.recalculate();
   }
 
@@ -451,9 +452,13 @@ class StudioApp {
     document.getElementById('btn-qr-handoff')?.addEventListener('click', () => this.qrModal.open(this.store.getInputs()));
     document.getElementById('btn-theme-toggle')?.addEventListener('click', () => this.store.toggleTheme());
 
-    // 3. Panel Toggles
+    // 3. Panel Toggles (In-pane card headers, edge restore tabs, and header toggles)
     document.getElementById('toggle-pane-left')?.addEventListener('click', () => this.store.toggleLeftPane());
     document.getElementById('toggle-pane-right')?.addEventListener('click', () => this.store.toggleRightPane());
+    document.getElementById('btn-restore-pane-left')?.addEventListener('click', () => this.store.toggleLeftPane());
+    document.getElementById('btn-restore-pane-right')?.addEventListener('click', () => this.store.toggleRightPane());
+    document.getElementById('btn-header-toggle-left')?.addEventListener('click', () => this.store.toggleLeftPane());
+    document.getElementById('btn-header-toggle-right')?.addEventListener('click', () => this.store.toggleRightPane());
 
     // 4. Form Change Listeners (Zero main-thread lag)
     const bindInput = (id: string, key: keyof Inputs, parser: (val: string) => any) => {
@@ -579,15 +584,73 @@ class StudioApp {
 
   private syncPaneCollapse(state: any) {
     const leftPane = document.getElementById('left-pane');
+    const rightPane = document.getElementById('right-pane');
+    const restoreLeft = document.getElementById('btn-restore-pane-left');
+    const restoreRight = document.getElementById('btn-restore-pane-right');
+    const headerToggleLeft = document.getElementById('btn-header-toggle-left');
+    const headerToggleRight = document.getElementById('btn-header-toggle-right');
+    const inPaneToggleLeft = document.getElementById('toggle-pane-left');
+    const inPaneToggleRight = document.getElementById('toggle-pane-right');
+
+    const isLeftCollapsed = !!state.leftPaneCollapsed;
+    const isRightCollapsed = !!state.rightPaneCollapsed;
+
     if (leftPane) {
-      if (state.leftPaneCollapsed) leftPane.classList.add('collapsed');
-      else leftPane.classList.remove('collapsed');
+      if (isLeftCollapsed) {
+        leftPane.classList.add('collapsed');
+        leftPane.setAttribute('aria-hidden', 'true');
+      } else {
+        leftPane.classList.remove('collapsed');
+        leftPane.setAttribute('aria-hidden', 'false');
+      }
     }
 
-    const rightPane = document.getElementById('right-pane');
     if (rightPane) {
-      if (state.rightPaneCollapsed) rightPane.classList.add('collapsed');
-      else rightPane.classList.remove('collapsed');
+      if (isRightCollapsed) {
+        rightPane.classList.add('collapsed');
+        rightPane.setAttribute('aria-hidden', 'true');
+      } else {
+        rightPane.classList.remove('collapsed');
+        rightPane.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    // Edge restore tabs
+    if (restoreLeft) {
+      restoreLeft.classList.toggle('visible', isLeftCollapsed);
+      restoreLeft.setAttribute('aria-expanded', (!isLeftCollapsed).toString());
+    }
+
+    if (restoreRight) {
+      restoreRight.classList.toggle('visible', isRightCollapsed);
+      restoreRight.setAttribute('aria-expanded', (!isRightCollapsed).toString());
+    }
+
+    // Top Header toggles
+    if (headerToggleLeft) {
+      headerToggleLeft.classList.toggle('active', !isLeftCollapsed);
+      headerToggleLeft.classList.toggle('collapsed', isLeftCollapsed);
+      headerToggleLeft.setAttribute('aria-pressed', (!isLeftCollapsed).toString());
+      headerToggleLeft.title = isLeftCollapsed
+        ? 'Expand Parameters Panel ([)'
+        : 'Collapse Parameters Panel ([)';
+    }
+
+    if (headerToggleRight) {
+      headerToggleRight.classList.toggle('active', !isRightCollapsed);
+      headerToggleRight.classList.toggle('collapsed', isRightCollapsed);
+      headerToggleRight.setAttribute('aria-pressed', (!isRightCollapsed).toString());
+      headerToggleRight.title = isRightCollapsed
+        ? 'Expand AI Copilot & Milestones (])'
+        : 'Collapse AI Copilot & Milestones (])';
+    }
+
+    // In-pane card toggle buttons
+    if (inPaneToggleLeft) {
+      inPaneToggleLeft.setAttribute('aria-expanded', (!isLeftCollapsed).toString());
+    }
+    if (inPaneToggleRight) {
+      inPaneToggleRight.setAttribute('aria-expanded', (!isRightCollapsed).toString());
     }
   }
 }

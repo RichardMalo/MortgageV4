@@ -52,8 +52,34 @@ export class Store {
     this.scheduleSave();
   }
 
+  public setLeftPane(collapsed: boolean) {
+    this.state.leftPaneCollapsed = collapsed;
+    this.notify();
+    this.scheduleSave();
+  }
+
   public toggleRightPane() {
     this.state.rightPaneCollapsed = !this.state.rightPaneCollapsed;
+    this.notify();
+    this.scheduleSave();
+  }
+
+  public setRightPane(collapsed: boolean) {
+    this.state.rightPaneCollapsed = collapsed;
+    this.notify();
+    this.scheduleSave();
+  }
+
+  public expandAllPanes() {
+    this.state.leftPaneCollapsed = false;
+    this.state.rightPaneCollapsed = false;
+    this.notify();
+    this.scheduleSave();
+  }
+
+  public collapseAllPanes() {
+    this.state.leftPaneCollapsed = true;
+    this.state.rightPaneCollapsed = true;
     this.notify();
     this.scheduleSave();
   }
