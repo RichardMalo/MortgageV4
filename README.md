@@ -4,6 +4,16 @@
 
 ---
 
+### 🌐 **LIVE LINK (GitHub Pages):**
+## 🚀 [**Launch TrueMortgage Studio v4.0 on GitHub Pages**](https://richardmalo.github.io/MortgageV4/)
+> **Direct URL:** [https://richardmalo.github.io/MortgageV4/](https://richardmalo.github.io/MortgageV4/)  
+> *Live browser-native application for [RichardMalo/MortgageV4: TrueMortgage Studio v4.0 - Institutional-Grade Debt Elimination Engine & Cross-Platform Financial Studio](https://github.com/RichardMalo/MortgageV4)*
+
+[![Live Application](https://img.shields.io/badge/🌐_LIVE_APP-richardmalo.github.io%2FMortgageV4-0284c7?style=for-the-badge&logo=googlechrome&logoColor=white)](https://richardmalo.github.io/MortgageV4/)
+[![GitHub Actions CI/CD](https://img.shields.io/github/actions/workflow/status/RichardMalo/MortgageV4/ci.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=white&label=CI%2FCD)](https://github.com/RichardMalo/MortgageV4/actions)
+
+---
+
 ## 📑 Overview & The "Cockpit Dilemma" Solution
 
 While **TrueMortgage v3.1.0** established institutional mathematical rigor (Canadian Bank Act compounding, OSFI B-20 stress tests, Dec 2024 reforms, CMHC tiers, TILA IRR solvers, and multi-debt cascades), its user interface suffered from the **"Cockpit Dilemma"**: cognitive overload from 30+ stacked inputs, monolithic code (2,687-line `index.html` and 4,700-line stylesheet), and heavy Plotly.js charts (~3MB bundle with mobile touch collisions).

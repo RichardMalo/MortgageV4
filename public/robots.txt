@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://richardmalo.github.io/TrueMortgageV3/sitemap.xml
+Sitemap: https://richardmalo.github.io/MortgageV4/sitemap.xml
