@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+    <title>TrueMortgage Studio v4.0 (MTGV4.0) — Institutional-Grade Debt Elimination Engine</title>
+    <meta name="description" content="TrueMortgage Studio v4.0: Next-generation debt elimination platform with Canadian Bank Act compounding, OSFI B-20 stress tests, AU/UK offset accounts, and local AI copilot." />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="stylesheet" href="/src/styles/main.css" />
+  </head>
+  <body>
+    <!-- Top Header -->
+    <header class="studio-header">
+      <div class="studio-brand">
+        <div class="studio-brand-logo">TM</div>
+        <div>
+          <span>TrueMortgage Studio</span>
+          <span class="studio-brand-tag">v4.0</span>
+        </div>
+      </div>
+
+      <!-- 3-Tier Progressive Disclosure Navigation -->
+      <nav class="studio-stage-tabs" aria-label="Workflow stages">
+        <button class="stage-tab-btn active" data-stage="pulse" id="nav-stage-pulse">
+          <span>⚡ Pulse</span>
+          <span class="stage-badge">[1]</span>
+        </button>
+        <button class="stage-tab-btn" data-stage="lab" id="nav-stage-lab">
+          <span>🧪 Strategy Lab</span>
+          <span class="stage-badge">[2]</span>
+        </button>
+        <button class="stage-tab-btn" data-stage="engine" id="nav-stage-engine">
+          <span>⚙️ Engine Room</span>
+          <span class="stage-badge">[3]</span>
+        </button>
+      </nav>
+
+      <!-- Action Buttons -->
+      <div class="studio-header-actions">
+        <button id="btn-command-palette" class="studio-btn" title="Command Palette (Cmd/Ctrl + K)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          <span class="hide-mobile">Command</span>
+          <kbd class="command-palette-badge">⌘K</kbd>
+        </button>
+        <button id="btn-qr-handoff" class="studio-btn primary" title="Zero-Cloud Device Handoff">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 7h.01"/><path d="M17 7h.01"/><path d="M7 17h.01"/><path d="M17 17h.01"/></svg>
+          <span>Handoff</span>
+        </button>
+        <button id="btn-theme-toggle" class="studio-btn" title="Toggle Theme">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Workspace -->
+    <main class="studio-workspace">
+      <!-- Left Pane (Collapsible Loan Specs & Parameters) -->
+      <aside class="studio-pane studio-pane-left" id="left-pane">
+        <div class="studio-card">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+              <span>Property & Loan Specs</span>
+            </div>
+            <button class="studio-btn small" id="toggle-pane-left" title="Collapse Panel ([)">[</button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-home-price">Home Price</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-home-price" class="form-input has-prefix" step="5000" min="10000" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-down-payment">
+              <span>Down Payment</span>
+              <span id="label-down-pct" class="mono text-cyan">20.0%</span>
+            </label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-down-payment" class="form-input has-prefix" step="5000" min="0" />
+            </div>
+            <input type="range" id="slider-down-payment" class="form-range-slider" min="5" max="50" step="0.5" value="20" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-annual-rate">Interest Rate (APR)</label>
+            <div class="form-input-wrapper">
+              <input type="number" id="input-annual-rate" class="form-input has-suffix" step="0.05" min="0.1" max="25" />
+              <span class="form-input-suffix">%</span>
+            </div>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div class="form-group">
+              <label class="form-label" for="input-amortization">Amortization</label>
+              <div class="form-input-wrapper">
+                <input type="number" id="input-amortization" class="form-input has-suffix" min="1" max="40" />
+                <span class="form-input-suffix">Yrs</span>
+              </div>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="input-term">Term Renewal</label>
+              <div class="form-input-wrapper">
+                <input type="number" id="input-term" class="form-input has-suffix" min="1" max="10" />
+                <span class="form-input-suffix">Yrs</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-compounding">Compounding Standard</label>
+            <select id="select-compounding" class="form-select">
+              <option value="semi">Canada (Semi-Annual Bank Act)</option>
+              <option value="monthly">USA / UK / AU (Nominal Monthly)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-frequency">Payment Frequency</label>
+            <select id="select-frequency" class="form-select">
+              <option value="monthly">Monthly (12/yr)</option>
+              <option value="accelerated-bi-weekly">Accelerated Bi-Weekly (26/yr - Fast)</option>
+              <option value="bi-weekly">Regular Bi-Weekly (26/yr)</option>
+              <option value="semi-monthly">Semi-Monthly (24/yr)</option>
+              <option value="accelerated-weekly">Accelerated Weekly (52/yr)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-start-date">Start Date</label>
+            <input type="date" id="input-start-date" class="form-input" />
+          </div>
+        </div>
+
+        <!-- AU & UK Offset Account Box -->
+        <div class="studio-card">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/></svg>
+              <span>Mortgage Offset Account</span>
+            </div>
+            <span class="studio-brand-tag">AU / UK</span>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-offset-balance">Linked Offset Savings</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-offset-balance" class="form-input has-prefix" step="1000" min="0" placeholder="0" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="input-offset-monthly">Monthly Savings Addition</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-offset-monthly" class="form-input has-prefix" step="100" min="0" placeholder="0" />
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Center Canvas (Progressive Disclosure Fluid Story) -->
+      <section class="studio-canvas-center" id="center-canvas">
+        <!-- Hero Kinetic Banner (Dynamic Readout) -->
+        <div class="hero-pulse-banner">
+          <div class="hero-pulse-stat">
+            <span class="hero-stat-label">Total Projected Savings</span>
+            <div class="hero-stat-value" id="hero-total-savings">$54,240</div>
+            <div class="hero-stat-sub">
+              <span>Debt-Free Date:</span>
+              <strong id="hero-payoff-date" class="text-cyan mono">Oct 2046</strong>
+              <span class="hide-mobile">•</span>
+              <span id="hero-years-saved" class="text-emerald font-semibold">4.8 Years Shaved</span>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <div style="text-align: right;">
+              <div style="font-size: 0.72rem; opacity: 0.7; text-transform: uppercase;">Periodic Payment</div>
+              <div id="hero-monthly-payment" style="font-size: 1.45rem; font-weight: 800; font-family: var(--font-mono); color: #f8fafc;">
+                $3,420
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STAGE 1: THE PULSE (Casual / Quick Estimation View) -->
+        <div id="stage-pulse-content" class="stage-section active">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 18px;">
+            <!-- Dial 1: Balance -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">1. Loan Balance</span>
+                <span id="pulse-balance-label" class="mono text-cyan font-bold">$640,000</span>
+              </div>
+              <input type="range" id="pulse-slider-balance" class="form-range-slider" min="50000" max="2000000" step="10000" value="640000" />
+              <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted);">
+                <span>$50k</span>
+                <span>$1M</span>
+                <span>$2M</span>
+              </div>
+            </div>
+
+            <!-- Dial 2: Interest Rate -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">2. Interest Rate</span>
+                <span id="pulse-rate-label" class="mono text-rose font-bold">4.89%</span>
+              </div>
+              <input type="range" id="pulse-slider-rate" class="form-range-slider" min="1.0" max="12.0" step="0.05" value="4.89" />
+              <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted);">
+                <span>1.0%</span>
+                <span>6.0%</span>
+                <span>12.0%</span>
+              </div>
+            </div>
+
+            <!-- Dial 3: Monthly Discretionary Target -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">3. Discretionary Target (+Extra)</span>
+                <span id="pulse-extra-label" class="mono text-emerald font-bold">+$150 / mo</span>
+              </div>
+              <input type="range" id="pulse-slider-extra" class="form-range-slider" min="0" max="2500" step="25" value="150" />
+              <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted);">
+                <span>+$0</span>
+                <span>+$1,000</span>
+                <span>+$2,500</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quick Jump Callout -->
+          <div style="margin-top: 18px; padding: 16px; border-radius: var(--radius-md); background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-weight: 700; font-size: 0.9rem;">Ready for Interactive Optimization?</div>
+              <div style="font-size: 0.78rem; opacity: 0.8;">Explore the Living Balance Arc, continuous scrubbers, and S&P 500 opportunity cost split.</div>
+            </div>
+            <button class="studio-btn primary" id="btn-enter-lab">Open Strategy Lab &rarr;</button>
+          </div>
+        </div>
+
+        <!-- STAGE 2: STRATEGY LAB (Interactive Optimization View) -->
+        <div id="stage-lab-content" class="stage-section" style="display: none;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            <!-- The Living Balance Arc -->
+            <div class="studio-card" style="align-items: center;">
+              <div class="studio-card-header" style="width: 100%;">
+                <span class="studio-card-title">Living Balance Arc</span>
+                <span class="studio-brand-tag">Vampire vs Equity</span>
+              </div>
+              <div id="living-arc-container" style="width: 100%; min-height: 380px;"></div>
+            </div>
+
+            <!-- Amortization Trajectory Micro-Chart -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">Amortization Trajectory Overlay</span>
+                <div style="display: flex; gap: 8px; font-size: 0.75rem;">
+                  <span style="color: var(--accent-cyan); font-weight: 700;">● Strategy</span>
+                  <span style="color: var(--text-muted);">-- Baseline</span>
+                </div>
+              </div>
+              <div id="trajectory-chart-container" style="width: 100%; height: 260px;"></div>
+            </div>
+          </div>
+
+          <!-- Strategy Continuous Scrubbers -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <span class="studio-card-title">Continuous "What-If" Scrubbers</span>
+              <span class="text-cyan font-semibold" style="font-size: 0.78rem;">Zero main-thread lag</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label" for="slider-extra-monthly">Monthly Discretionary Extra</label>
+                  <span id="val-extra-monthly" class="mono text-emerald font-bold">+$150/mo</span>
+                </div>
+                <input type="range" id="slider-extra-monthly" class="form-range-slider" min="0" max="3000" step="25" value="150" />
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label" for="slider-lump-sum">Annual Bonus / Upfront Lump Sum</label>
+                  <span id="val-lump-sum" class="mono text-cyan font-bold">$0</span>
+                </div>
+                <input type="range" id="slider-lump-sum" class="form-range-slider" min="0" max="50000" step="500" value="0" />
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label" for="slider-invest-rate">S&P 500 Market Return</label>
+                  <span id="val-invest-rate" class="mono text-amber font-bold">7.5% / yr</span>
+                </div>
+                <input type="range" id="slider-invest-rate" class="form-range-slider" min="3.0" max="14.0" step="0.25" value="7.5" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Opportunity Cost Split-Screen -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <span class="studio-card-title">Opportunity Cost: Prepay vs. S&P 500 Index</span>
+              <span id="opp-cost-badge" class="studio-brand-tag">Analyzing</span>
+            </div>
+            <div id="opp-cost-message" style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.4;"></div>
+            <div id="opportunity-chart-container" style="width: 100%; height: 250px;"></div>
+          </div>
+
+          <!-- Career Labor Converter -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <span class="studio-card-title">Career Labor Converter ("Bank Wages")</span>
+              <span class="studio-brand-tag">Freedom Day</span>
+            </div>
+            <div id="labor-viz-container" style="width: 100%;"></div>
+          </div>
+        </div>
+
+        <!-- STAGE 3: THE ENGINE ROOM (Deep Institutional Mechanics) -->
+        <div id="stage-engine-content" class="stage-section" style="display: none;">
+          <!-- Macro Refinancing Rate-Ladder -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <div>
+                <span class="studio-card-title">Refinancing Rate-Shock Ladder (Renewal Stress Simulation)</span>
+                <div style="font-size: 0.75rem; opacity: 0.7; margin-top: 2px;">Touch & Drag Any Renewal Node Directly on the Graph</div>
+              </div>
+              <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                <button class="studio-btn small macro-btn active" data-preset="status-quo">Status Quo</button>
+                <button class="studio-btn small macro-btn" data-preset="soft-landing">Soft Landing (-1.5%)</button>
+                <button class="studio-btn small macro-btn" data-preset="inflation-spike">Inflation (+2.0%)</button>
+              </div>
+            </div>
+            <div id="rate-ladder-chart-container" style="width: 100%; height: 220px; cursor: grab;"></div>
+            <div id="rate-ladder-feedback" style="display: flex; justify-content: space-between; align-items: center; font-size: 0.76rem; color: var(--text-secondary); padding: 8px 12px; border-radius: var(--radius-sm); background: rgba(56, 189, 248, 0.06); border: 1px solid rgba(56, 189, 248, 0.15);">
+              <span>🎯 <strong>Interactive Playground:</strong> Touch or click any circle node above and drag it up/down to simulate rate shocks.</span>
+              <span id="rate-ladder-active-status" class="mono text-cyan font-bold">Status Quo</span>
+            </div>
+          </div>
+
+          <!-- Canadian Statutory Rules & Closing Taxes Matrix -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px;">
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">Canadian Dec 2024 Tiered CMHC & OSFI B-20</span>
+                <span class="studio-brand-tag">Canada</span>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 10px; font-size: 0.82rem;">
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                  <span>Min Statutory Down Payment:</span>
+                  <span id="stat-can-min-down" class="mono font-bold">$40,000 (5.0%)</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                  <span>CMHC Default Insurance:</span>
+                  <span id="stat-can-cmhc-premium" class="mono text-cyan">$0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid var(--border-color); padding-bottom: 6px;">
+                  <span>Provincial Sales Tax on CMHC (Cash):</span>
+                  <span id="stat-can-cmhc-pst" class="mono text-rose">$0</span>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                  <span>OSFI B-20 Stress Test Qualifying Rate:</span>
+                  <span id="stat-can-stress-rate" class="mono text-amber font-bold">6.89%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Payoff Goal Solver -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">Target Payoff Goal Solver</span>
+                <span class="studio-brand-tag">Inverse Binary Search</span>
+              </div>
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between;">
+                  <label class="form-label" for="slider-target-years">I want to be 100% debt-free in:</label>
+                  <span id="label-target-years" class="mono text-cyan font-bold">15 Years</span>
+                </div>
+                <input type="range" id="slider-target-years" class="form-range-slider" min="3" max="30" step="1" value="15" />
+              </div>
+              <div style="padding: 12px; border-radius: var(--radius-sm); background: rgba(0,0,0,0.25); border: 1px solid var(--border-color);">
+                <div style="font-size: 0.75rem; color: var(--text-secondary);">Required Discretionary Payment:</div>
+                <div id="goal-solver-required-extra" style="font-size: 1.3rem; font-weight: 800; font-family: var(--font-mono); color: var(--accent-emerald);">
+                  +$540 / month
+                </div>
+                <button id="btn-apply-goal-solver" class="studio-btn small primary" style="margin-top: 8px;">Apply to Scenario</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Multi-Debt Unified Household Portfolio -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <div>
+                <span class="studio-card-title">Unified Household Balance Sheet Cascade</span>
+                <div style="font-size: 0.75rem; opacity: 0.7; margin-top: 2px;">Mortgage + Credit Cards + Auto Loans Portfolio</div>
+              </div>
+              <div style="display: flex; gap: 6px;">
+                <button class="studio-btn small cascade-strat-btn active" data-strat="avalanche">Avalanche (High APR)</button>
+                <button class="studio-btn small cascade-strat-btn" data-strat="snowball">Snowball (Small Bal)</button>
+              </div>
+            </div>
+            <div id="multi-debt-chart-container" style="width: 100%; height: 220px;"></div>
+          </div>
+
+          <!-- Full Amortization Ledger Table -->
+          <div id="ledger-table-container"></div>
+        </div>
+      </section>
+
+      <!-- Right Pane (Collapsible AI Copilot & Milestones Highway) -->
+      <aside class="studio-pane studio-pane-right" id="right-pane">
+        <!-- Local AI Financial Copilot -->
+        <div class="studio-card">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a8 8 0 0 0-8 8c0 5 8 12 8 12s8-7 8-12a8 8 0 0 0-8-8z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span>AI Financial Copilot</span>
+            </div>
+            <button class="studio-btn small" id="toggle-pane-right" title="Collapse Panel (])">]</button>
+          </div>
+          <div id="copilot-container" style="display: flex; flex-direction: column; gap: 10px;"></div>
+        </div>
+
+        <!-- Milestones Highway -->
+        <div class="studio-card">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              <span>Milestone Highway</span>
+            </div>
+          </div>
+          <div id="milestones-container" class="milestone-highway"></div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- Mobile Sticky Bottom Action Dock -->
+    <nav class="mobile-bottom-dock" aria-label="Mobile navigation">
+      <button class="mobile-dock-btn active" data-mobile-tab="pulse">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span>Pulse</span>
+      </button>
+      <button class="mobile-dock-btn" data-mobile-tab="lab">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/></svg>
+        <span>Lab</span>
+      </button>
+      <button class="mobile-dock-btn" data-mobile-tab="engine">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+        <span>Engine</span>
+      </button>
+      <button class="mobile-dock-btn" data-mobile-tab="ledger">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        <span>Ledger</span>
+      </button>
+    </nav>
+
+    <!-- Main Entry Module -->
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

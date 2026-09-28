@@ -1,0 +1,30 @@
+{
+  "name": "mtgv4",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TrueMortgage Studio v4.0 — Institutional-Grade Debt Elimination Engine & Cross-Platform Financial Studio",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^22.10.1",
+    "@types/qrcode": "^1.5.5",
+    "jsdom": "^29.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}
