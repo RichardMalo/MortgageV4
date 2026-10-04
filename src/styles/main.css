@@ -1068,3 +1068,104 @@ body {
     font-size: 1.8rem;
   }
 }
+
+/* Debt Mode Navigation Tabs */
+.studio-mode-tabs {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  padding: 3px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  gap: 2px;
+}
+
+.mode-tab-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+
+.mode-tab-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-surface-hover);
+}
+
+.mode-tab-btn.active {
+  background: var(--card-bg);
+  color: var(--accent-cyan);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+/* Heatmap Interactive Cell Styling */
+.heatmap-cell:hover {
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(56, 189, 248, 0.4);
+  z-index: 5;
+}
+
+.heatmap-cell.selected {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -1px;
+}
+
+/* Collapsible Card Details */
+details.studio-collapsible {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  transition: all 0.2s ease;
+}
+
+details.studio-collapsible[open] {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+details.studio-collapsible summary {
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  list-style: none;
+  user-select: none;
+}
+
+details.studio-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Delta Comparison Badges */
+.delta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+}
+
+.delta-badge.positive {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.delta-badge.negative {
+  background: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}

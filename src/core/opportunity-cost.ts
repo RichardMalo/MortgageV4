@@ -4,7 +4,7 @@
  */
 
 import { Inputs, ScheduleRow } from './types.js';
-import { generateMortgageSchedule } from './math.js';
+import { generateMortgageSchedule, getPeriodsPerYear } from './math.js';
 
 export interface OppCostPoint {
   month: number;
@@ -60,20 +60,25 @@ export const calculateOpportunityCost = (
   let crossoverMonth: number | null = null;
   const points: OppCostPoint[] = [];
 
+  const stratPpy = getPeriodsPerYear(inputs.frequency);
   const stratMap = new Map<number, ScheduleRow>();
   strategySchedule.forEach((r) => stratMap.set(r.period, r));
 
   const baseMap = new Map<number, ScheduleRow>();
   baseline.schedule.forEach((r) => baseMap.set(r.period, r));
 
-  const stratPayoffMonth = strategySchedule.length > 0 ? strategySchedule[strategySchedule.length - 1]!.period : totalMonths;
+  // Convert strategy installments to calendar months so both curves share one timeline
+  const stratPayoffMonth =
+    strategySchedule.length > 0
+      ? Math.ceil((strategySchedule[strategySchedule.length - 1]!.period * 12) / stratPpy)
+      : totalMonths;
 
   for (let m = 1; m <= totalMonths; m++) {
     const baseRow = baseMap.get(m);
-    const stratRow = stratMap.get(m);
+    const stratRow = stratMap.get(Math.max(1, Math.round((m * stratPpy) / 12)));
 
     const baseBal = baseRow ? baseRow.balance : 0;
-    const stratBal = stratRow ? stratRow.balance : 0;
+    const stratBal = m > stratPayoffMonth ? 0 : stratRow ? stratRow.balance : 0;
 
     const baseEquity = Math.max(0, homePrice - baseBal);
     const stratEquity = Math.max(0, homePrice - stratBal);

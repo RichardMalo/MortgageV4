@@ -18,7 +18,8 @@ import {
   MultiDebtStrategySummary,
   MultiDebtPaymentRow,
   PaymentFrequency,
-  CompoundingMethod
+  CompoundingMethod,
+  LumpSumItem
 } from './types.js';
 import {
   PMI_LTV_THRESHOLD,
@@ -45,6 +46,54 @@ export const buildLumpSumsMap = (
     }
   }
   return map.size > 0 ? map : null;
+};
+
+/**
+ * Number of installments per calendar year for a given payment frequency.
+ */
+export const getPeriodsPerYear = (freq?: PaymentFrequency): number => {
+  if (freq === 'semi-monthly') return 24;
+  if (freq === 'bi-weekly' || freq === 'accelerated-bi-weekly') return 26;
+  if (freq === 'weekly' || freq === 'accelerated-weekly') return 52;
+  return 12;
+};
+
+/**
+ * Resolves scheduled lump sums into concrete payment numbers for the active frequency.
+ * - Items with `atMonth` are mapped from a calendar-month offset to the matching installment.
+ * - Items with `repeatYearly` are expanded every 12 months until `maxPeriods`.
+ * - Legacy items (only `paymentNumber`) pass through unchanged.
+ */
+export const resolveLumpSums = (
+  lumpSums: LumpSumItem[] | undefined,
+  periodsPerYear: number,
+  maxPeriods: number
+): Array<{ paymentNumber: number; amount: number }> => {
+  if (!lumpSums || lumpSums.length === 0) return [];
+  const out: Array<{ paymentNumber: number; amount: number }> = [];
+  const monthToPeriod = (month: number) =>
+    Math.max(1, Math.round(((month - 1) * periodsPerYear) / 12) + 1);
+
+  for (const item of lumpSums) {
+    const amount = Math.max(0, Number(item.amount) || 0);
+    if (amount <= 0) continue;
+    const hasMonth = typeof item.atMonth === 'number' && item.atMonth >= 1;
+    if (!hasMonth) {
+      out.push({ paymentNumber: Math.max(1, Math.round(item.paymentNumber || 1)), amount });
+      continue;
+    }
+    const startMonth = Math.round(item.atMonth!);
+    if (item.repeatYearly) {
+      for (let m = startMonth; ; m += 12) {
+        const p = monthToPeriod(m);
+        if (p > maxPeriods) break;
+        out.push({ paymentNumber: p, amount });
+      }
+    } else {
+      out.push({ paymentNumber: monthToPeriod(startMonth), amount });
+    }
+  }
+  return out;
 };
 
 /**
@@ -289,10 +338,7 @@ export const generateMortgageSchedule = (
   const principal = cmhcRes.totalPrincipal;
 
   const freq = isBaseline ? 'monthly' : inputs.frequency;
-  let periodsPerYear = 12;
-  if (freq === 'semi-monthly') periodsPerYear = 24;
-  else if (freq === 'bi-weekly' || freq === 'accelerated-bi-weekly') periodsPerYear = 26;
-  else if (freq === 'weekly' || freq === 'accelerated-weekly') periodsPerYear = 52;
+  const periodsPerYear = getPeriodsPerYear(freq);
 
   if (principal <= 0) {
     return {
@@ -348,9 +394,17 @@ export const generateMortgageSchedule = (
       ? (principal * (Math.min(100, Math.max(0, annualPmiRate)) / 100)) / periodsPerYear
       : 0;
 
-  // Scheduled Lump Sums
-  const lumpSumsMap = !isBaseline ? buildLumpSumsMap(inputs.lumpSums) : null;
-  const defaultLumpSum1 = !isBaseline && !(lumpSumsMap?.has(1)) ? Math.max(0, inputs.lumpSum || 0) : 0;
+  // Scheduled Lump Sums (month-anchored and recurring items resolved to installments)
+  const lumpSumsMap = !isBaseline
+    ? buildLumpSumsMap(
+        resolveLumpSums(
+          inputs.lumpSums,
+          periodsPerYear,
+          Math.ceil(safeAmort * periodsPerYear) + periodsPerYear * 25
+        )
+      )
+    : null;
+  const defaultLumpSum1 = !isBaseline ? Math.max(0, inputs.lumpSum || 0) : 0;
 
   // Offset Account Setup (AU/UK Standard)
   let currentOffsetBalance = !isBaseline ? Math.max(0, inputs.offsetBalance || 0) : 0;

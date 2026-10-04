@@ -37,6 +37,14 @@
         </button>
       </nav>
 
+      <!-- Debt Mode Navigation Tabs -->
+      <nav class="studio-mode-tabs hide-mobile" aria-label="Debt modes">
+        <button class="mode-tab-btn active" data-mode="mortgage" id="btn-mode-mortgage">🏠 Mortgage</button>
+        <button class="mode-tab-btn" data-mode="cc" id="btn-mode-cc">💳 Credit Card</button>
+        <button class="mode-tab-btn" data-mode="loan" id="btn-mode-loan">🚗 Personal Loan</button>
+        <button class="mode-tab-btn" data-mode="portfolio" id="btn-mode-portfolio">📊 Household</button>
+      </nav>
+
       <!-- Action Buttons -->
       <div class="studio-header-actions">
         <!-- Workspace Panel Toggles -->
@@ -53,6 +61,14 @@
           </button>
         </div>
 
+        <button id="btn-sandbox-profiles" class="studio-btn" title="Scenario Profiles & Sandbox">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+          <span class="hide-mobile">Scenarios</span>
+        </button>
+        <button id="btn-future-lump-sums" class="studio-btn" title="Schedule Future Lump Sum Injections">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+          <span class="hide-mobile">Lump Sums</span>
+        </button>
         <button id="btn-command-palette" class="studio-btn" title="Command Palette (Cmd/Ctrl + K)">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
           <span class="hide-mobile">Command</span>
@@ -79,11 +95,12 @@
 
       <!-- Left Pane (Collapsible Loan Specs & Parameters) -->
       <aside class="studio-pane studio-pane-left" id="left-pane">
-        <div class="studio-card">
+        <!-- Mortgage Specs -->
+        <div class="studio-card" id="pane-mortgage-controls">
           <div class="studio-card-header">
             <div class="studio-card-title">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              <span>Property & Loan Specs</span>
+              <span>Property & Mortgage Specs</span>
             </div>
             <button class="studio-btn small pane-card-toggle" id="toggle-pane-left" title="Collapse Panel ([)" aria-label="Collapse Left Panel">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
@@ -161,6 +178,136 @@
           </div>
         </div>
 
+        <!-- Credit Card Revolving Debt Specs (Shown in CC Mode) -->
+        <div class="studio-card" id="pane-cc-controls" style="display: none;">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+              <span>Credit Card Specs</span>
+            </div>
+            <span class="studio-brand-tag">Revolving Debt</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-cc-balance">Current Balance</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-cc-balance" class="form-input has-prefix" step="500" min="100" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-cc-rate">Annual APR %</label>
+            <div class="form-input-wrapper">
+              <input type="number" id="input-cc-rate" class="form-input has-suffix" step="0.1" min="1" max="45" value="19.99" />
+              <span class="form-input-suffix">%</span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-cc-compounding">Compounding Method</label>
+            <select id="select-cc-compounding" class="form-select">
+              <option value="simple">Simple Monthly (APR / 12)</option>
+              <option value="daily">Daily Compounding (365 Days)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="select-cc-rule">Minimum Payment Rule</label>
+            <select id="select-cc-rule" class="form-select">
+              <option value="on-3">Standard / Ontario (3% Rule: max($10, 3% bal, Int + 1%))</option>
+              <option value="qc-5">Quebec Law (5% Rule: max($10, 5% bal, Int + 1%))</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Consumer Personal / Vehicle Loan Specs (Shown in Loan Mode) -->
+        <div class="studio-card" id="pane-loan-controls" style="display: none;">
+          <div class="studio-card-header">
+            <div class="studio-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 17h10M7 12h10M7 7h10"/></svg>
+              <span>Personal Loan Specs</span>
+            </div>
+            <span class="studio-brand-tag">Installment</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-loan-amount">Loan Amount</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-loan-amount" class="form-input has-prefix" step="1000" min="500" value="25000" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="input-loan-origination">Upfront Origination Fee</label>
+            <div class="form-input-wrapper">
+              <span class="form-input-prefix">$</span>
+              <input type="number" id="input-loan-origination" class="form-input has-prefix" step="100" min="0" value="0" />
+            </div>
+          </div>
+
+          <div style="padding: 10px; border-radius: 6px; background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.2); font-size: 0.78rem; display: flex; justify-content: space-between;">
+            <span>TILA Effective APR (IRR):</span>
+            <strong id="label-effective-apr" class="mono text-cyan">4.89%</strong>
+          </div>
+        </div>
+
+        <!-- Collapsible Housing Costs (PITI / Escrow) -->
+        <details class="studio-collapsible" id="details-piti">
+          <summary>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 6l7-3 7 3M4 10v11M20 10v11M8 14v3M12 14v3M16 14v3"/></svg>
+              <span>Housing Costs (PITI Escrow)</span>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan);">Configure &darr;</span>
+          </summary>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" id="chk-use-piti" checked style="accent-color: var(--accent-cyan); cursor: pointer;" />
+              <label for="chk-use-piti" style="font-size: 0.8rem; font-weight: 600; cursor: pointer;">Include Property Taxes, Insurance & HOA</label>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-tax-rate">Annual Property Tax</label>
+              <div class="form-input-wrapper">
+                <span class="form-input-prefix">$</span>
+                <input type="number" id="input-tax-rate" class="form-input has-prefix" step="200" min="0" value="4200" />
+                <span class="form-input-suffix">/yr</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="input-ins-rate">Annual Home Insurance</label>
+              <div class="form-input-wrapper">
+                <span class="form-input-prefix">$</span>
+                <input type="number" id="input-ins-rate" class="form-input has-prefix" step="100" min="0" value="1200" />
+                <span class="form-input-suffix">/yr</span>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="form-group">
+                <label class="form-label" for="input-hoa-rate">Monthly HOA</label>
+                <div class="form-input-wrapper">
+                  <span class="form-input-prefix">$</span>
+                  <input type="number" id="input-hoa-rate" class="form-input has-prefix" step="50" min="0" value="0" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="input-pmi-rate">PMI Rate</label>
+                <div class="form-input-wrapper">
+                  <input type="number" id="input-pmi-rate" class="form-input has-suffix" step="0.1" min="0" max="5" value="0.5" />
+                  <span class="form-input-suffix">%</span>
+                </div>
+              </div>
+            </div>
+            <div style="font-size: 0.72rem; color: var(--text-muted);">
+              PMI automatically drops to $0 the moment loan-to-value reaches 80% (Homeowners Protection Act).
+            </div>
+          </div>
+        </details>
+
         <!-- AU & UK Offset Account Box -->
         <div class="studio-card">
           <div class="studio-card-header">
@@ -185,6 +332,71 @@
             </div>
           </div>
         </div>
+
+        <!-- International Closing Tax Estimator Matrix -->
+        <details class="studio-collapsible" id="details-closing-taxes">
+          <summary>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+              <span>Closing Taxes (LTT / SDLT / Duty)</span>
+            </div>
+            <span style="font-size: 0.75rem; color: var(--accent-cyan);">Calculate &darr;</span>
+          </summary>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 14px;">
+            <div class="form-group">
+              <label class="form-label" for="select-closing-country">Country / Tax Regime</label>
+              <select id="select-closing-country" class="form-select">
+                <option value="CA">Canada (Provincial Land Transfer Tax)</option>
+                <option value="UK">United Kingdom (HMRC SDLT Schedule)</option>
+                <option value="AU">Australia (State Transfer Duty)</option>
+                <option value="US">United States (No Statutory LTT)</option>
+              </select>
+            </div>
+
+            <div class="form-group" id="grp-closing-region">
+              <label class="form-label" for="select-closing-region">Province / State</label>
+              <select id="select-closing-region" class="form-select">
+                <option value="ON">Ontario (General PLTT)</option>
+                <option value="ON-TORONTO">City of Toronto (PLTT + MLTT)</option>
+                <option value="BC">British Columbia (PTT)</option>
+                <option value="AB">Alberta (Bill 20 Title Levy)</option>
+                <option value="QC">Quebec (Welcome Tax)</option>
+                <option value="NSW">New South Wales (NSW)</option>
+                <option value="VIC">Victoria (VIC)</option>
+                <option value="QLD">Queensland (QLD)</option>
+                <option value="WA">Western Australia (WA)</option>
+                <option value="SA">South Australia (SA)</option>
+              </select>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem;">
+              <div style="display: flex; align-items: center; gap: 6px;">
+                <input type="checkbox" id="chk-first-time-buyer" style="accent-color: var(--accent-cyan); cursor: pointer;" />
+                <label for="chk-first-time-buyer" style="cursor: pointer;">First-Time Homebuyer Rebate / Concession</label>
+              </div>
+              <div style="display: flex; align-items: center; gap: 6px;" id="row-additional-prop">
+                <input type="checkbox" id="chk-additional-property" style="accent-color: var(--accent-cyan); cursor: pointer;" />
+                <label for="chk-additional-property" style="cursor: pointer;">Second Home / Buy-to-Let (+5% Surcharge)</label>
+              </div>
+            </div>
+
+            <!-- Closing Tax Results -->
+            <div style="padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,0.25); border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem;">
+              <div style="display: flex; justify-content: space-between;">
+                <span>Statutory Closing Tax:</span>
+                <strong id="stat-closing-tax-gross" class="mono text-rose">$0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between;">
+                <span>First-Time Buyer Relief:</span>
+                <strong id="stat-closing-rebate" class="mono text-emerald">-$0</strong>
+              </div>
+              <div style="display: flex; justify-content: space-between; border-top: 1px solid var(--border-color); padding-top: 6px;">
+                <span style="font-weight: 700;">Net Cash Due at Closing:</span>
+                <strong id="stat-closing-tax-net" class="mono font-bold text-cyan">$0</strong>
+              </div>
+            </div>
+          </div>
+        </details>
       </aside>
 
       <!-- Center Canvas (Progressive Disclosure Fluid Story) -->
@@ -293,6 +505,25 @@
             </div>
           </div>
 
+          <!-- Monthly Payment Donut & Strategy Comparison Grid -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">Monthly Payment Allocation</span>
+                <span class="studio-brand-tag">PITI Breakdown</span>
+              </div>
+              <div id="payment-donut-container" style="width: 100%; min-height: 250px;"></div>
+            </div>
+
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <span class="studio-card-title">Strategy Comparison</span>
+                <span class="studio-brand-tag">Baseline vs Strategy</span>
+              </div>
+              <div id="strategy-comparison-container" style="width: 100%; min-height: 250px;"></div>
+            </div>
+          </div>
+
           <!-- Strategy Continuous Scrubbers -->
           <div class="studio-card">
             <div class="studio-card-header">
@@ -324,6 +555,22 @@
                 <input type="range" id="slider-invest-rate" class="form-range-slider" min="3.0" max="14.0" step="0.25" value="7.5" />
               </div>
             </div>
+          </div>
+
+          <!-- Payment Composition & Interest Crossover Micro-Chart -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <div>
+                <span class="studio-card-title">Payment Composition & Interest Crossover</span>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Principal vs. Interest distribution per payment with crossover tipping point</div>
+              </div>
+              <div style="display: flex; gap: 8px; font-size: 0.75rem;">
+                <span style="color: var(--accent-emerald); font-weight: 700;">● Principal</span>
+                <span style="color: var(--accent-rose); font-weight: 700;">● Interest</span>
+                <span style="color: var(--accent-cyan); font-weight: 700;">★ Crossover</span>
+              </div>
+            </div>
+            <div id="payment-composition-container" style="width: 100%; height: 260px;"></div>
           </div>
 
           <!-- Opportunity Cost Split-Screen -->
@@ -366,6 +613,18 @@
               <span>🎯 <strong>Interactive Playground:</strong> Touch or click any circle node above and drag it up/down to simulate rate shocks.</span>
               <span id="rate-ladder-active-status" class="mono text-cyan font-bold">Status Quo</span>
             </div>
+          </div>
+
+          <!-- 2D Prepayment Sensitivity Heatmap Matrix -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <div>
+                <span class="studio-card-title">2D Prepayment Sensitivity Matrix</span>
+                <div style="font-size: 0.75rem; opacity: 0.7; margin-top: 2px;">Simultaneous Evaluation of Monthly Extra (Rows) vs. One-Time Lump Sums (Cols). Click any cell to test that strategy combination.</div>
+              </div>
+              <span class="studio-brand-tag">Sensitivity Grid</span>
+            </div>
+            <div id="sensitivity-heatmap-container" style="width: 100%;"></div>
           </div>
 
           <!-- Canadian Statutory Rules & Closing Taxes Matrix -->
@@ -431,6 +690,58 @@
               </div>
             </div>
             <div id="multi-debt-chart-container" style="width: 100%; height: 220px;"></div>
+          </div>
+
+          <!-- Annual Cash Flow & Cumulative Outlays -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px;">
+            <!-- Annual Cash Flow Stacked Bar -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <div>
+                  <span class="studio-card-title">Annual Cash Flow Breakdown</span>
+                  <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Principal, Interest, Extra & Escrow by calendar year</div>
+                </div>
+                <div style="display: flex; gap: 8px; font-size: 0.72rem;">
+                  <span style="color: var(--accent-emerald);">● Prin</span>
+                  <span style="color: var(--accent-rose);">● Int</span>
+                  <span style="color: var(--accent-cyan);">● Extra</span>
+                  <span style="color: var(--accent-amber);">● Esc</span>
+                </div>
+              </div>
+              <div id="annual-cash-flow-container" style="width: 100%; height: 260px;"></div>
+            </div>
+
+            <!-- Cumulative Outflow Area Chart -->
+            <div class="studio-card">
+              <div class="studio-card-header">
+                <div>
+                  <span class="studio-card-title">Cumulative Outflow Stacked Area</span>
+                  <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Lifetime cumulative cash distribution</div>
+                </div>
+                <div style="display: flex; gap: 8px; font-size: 0.72rem;">
+                  <span style="color: var(--accent-rose);">● Interest</span>
+                  <span style="color: var(--accent-emerald);">● Principal</span>
+                  <span style="color: var(--accent-amber);">● Escrow</span>
+                </div>
+              </div>
+              <div id="cumulative-outflow-container" style="width: 100%; height: 260px;"></div>
+            </div>
+          </div>
+
+          <!-- Home Equity & LTV Decay Curve -->
+          <div class="studio-card">
+            <div class="studio-card-header">
+              <div>
+                <span class="studio-card-title">Home Equity Build-Up & LTV Eradication</span>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Equity accumulation ($) and loan-to-value percentage with 80% PMI removal threshold</div>
+              </div>
+              <div style="display: flex; gap: 8px; font-size: 0.75rem;">
+                <span style="color: var(--accent-emerald); font-weight: 700;">● Equity ($)</span>
+                <span style="color: var(--accent-cyan); font-weight: 700;">-- LTV (%)</span>
+                <span style="color: var(--accent-rose); font-weight: 700;">-- 80% Threshold</span>
+              </div>
+            </div>
+            <div id="equity-ltv-container" style="width: 100%; height: 260px;"></div>
           </div>
 
           <!-- Full Amortization Ledger Table -->

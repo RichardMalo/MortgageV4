@@ -8,6 +8,16 @@ export interface LumpSumItem {
   amount: number;
   paymentNumber: number;
   dateLabel?: string;
+  /** Optional label (e.g. "Annual bonus", "Inheritance") */
+  label?: string;
+  /**
+   * 1-based month offset from the loan start. When set it takes precedence over
+   * `paymentNumber`, so the lump sum stays on the same calendar month regardless
+   * of the selected payment frequency.
+   */
+  atMonth?: number;
+  /** Repeat this lump sum every 12 months from `atMonth` until payoff. */
+  repeatYearly?: boolean;
 }
 
 export type PaymentFrequency =
@@ -23,6 +33,8 @@ export type CompoundingMethod = 'semi' | 'monthly' | 'daily';
 export type MacroRatePreset = 'status-quo' | 'soft-landing' | 'inflation-spike' | 'custom';
 
 export type StudioStage = 'pulse' | 'lab' | 'engine';
+
+export type DebtMode = 'mortgage' | 'cc' | 'loan' | 'portfolio';
 
 export interface MultiDebtAccount {
   id: string;
@@ -62,6 +74,10 @@ export interface Inputs {
   insRate: number;
   hoaRate: number;
   pmiRate: number;
+  includeEscrow?: boolean;
+  propertyTaxAnnual?: number;
+  homeInsuranceAnnual?: number;
+  hoaMonthly?: number;
 
   // Opportunity Cost (Investing)
   useOppCost: boolean;

@@ -14,6 +14,14 @@ export interface CommandItem {
   handler: () => void;
 }
 
+export interface CommandPaletteActions {
+  onOpenGoalSolver?: () => void;
+  onOpenHandoff?: () => void;
+  onExportCsv?: () => void;
+  onOpenLumpSums?: () => void;
+  onOpenSandbox?: () => void;
+}
+
 export class CommandPalette {
   private store: Store;
   private modal: HTMLElement | null = null;
@@ -24,14 +32,14 @@ export class CommandPalette {
   private filteredCommands: CommandItem[] = [];
   private commands: CommandItem[] = [];
 
-  constructor(store: Store, extraActions?: { onOpenGoalSolver?: () => void; onOpenHandoff?: () => void; onExportCsv?: () => void }) {
+  constructor(store: Store, extraActions?: CommandPaletteActions) {
     this.store = store;
     this.initCommands(extraActions);
     this.createDom();
     this.bindGlobalShortcuts();
   }
 
-  private initCommands(extraActions?: { onOpenGoalSolver?: () => void; onOpenHandoff?: () => void; onExportCsv?: () => void }) {
+  private initCommands(extraActions?: CommandPaletteActions) {
     this.commands = [
       {
         id: 'stage-pulse',
@@ -65,6 +73,20 @@ export class CommandPalette {
         handler: () => this.store.setMode('mortgage')
       },
       {
+        id: 'mode-cc',
+        category: 'Mode',
+        title: 'Switch to Credit Card Revolving Debt',
+        subtitle: 'Model minimum payments, daily compounding interest, and payoff acceleration',
+        handler: () => this.store.setMode('cc')
+      },
+      {
+        id: 'mode-loan',
+        category: 'Mode',
+        title: 'Switch to Personal / Vehicle Loan',
+        subtitle: 'Calculate fixed installment loan with upfront origination fee APR',
+        handler: () => this.store.setMode('loan')
+      },
+      {
         id: 'mode-portfolio',
         category: 'Mode',
         title: 'Switch to Unified Household Portfolio',
@@ -91,6 +113,20 @@ export class CommandPalette {
         title: 'Macro Scenario: Inflation Spike',
         subtitle: 'Simulate +2.00% rate hike shock at next 5-year renewal window',
         handler: () => this.store.updateInputs({ rateShockEnabled: true, rateShockPreset: 'inflation-spike' })
+      },
+      {
+        id: 'action-lump-sums',
+        category: 'Action',
+        title: 'Scheduled Future Lump Sums',
+        subtitle: 'Schedule upcoming bonuses, tax refunds, or recurring annual principal injections',
+        handler: () => { if (extraActions?.onOpenLumpSums) extraActions.onOpenLumpSums(); }
+      },
+      {
+        id: 'action-sandbox',
+        category: 'Action',
+        title: 'Scenario Sandbox & Comparison',
+        subtitle: 'Save, duplicate, switch, and compare multiple financial scenarios',
+        handler: () => { if (extraActions?.onOpenSandbox) extraActions.onOpenSandbox(); }
       },
       {
         id: 'action-goal-solver',
