@@ -658,8 +658,8 @@ class StudioApp {
     bindInput('input-home-price', 'homePrice', parseFloat);
     bindInput('input-down-payment', 'downPayment', parseFloat);
     bindInput('input-annual-rate', 'annualRate', parseFloat);
-    bindInput('input-amortization', 'amortizationYears', parseInt);
-    bindInput('input-term', 'termYears', parseInt);
+    bindInput('input-amortization', 'amortizationYears', parseFloat);
+    bindInput('input-term', 'termYears', parseFloat);
     bindInput('select-compounding', 'compounding', (v) => v as any);
     bindInput('select-frequency', 'frequency', (v) => v as any);
     bindInput('input-start-date', 'startDate', (v) => v);

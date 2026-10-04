@@ -205,4 +205,22 @@ describe('V4.0 Studio Features & Mathematical Engines', () => {
       expect(opp.recommendation).toBeDefined();
     });
   });
+
+  describe('Fractional Amortization & Term Handling', () => {
+    it('supports decimal amortization years like 17.7 without truncation', () => {
+      const inputs: Inputs = {
+        ...DEFAULT_INPUTS,
+        homePrice: 500000,
+        downPayment: 100000,
+        annualRate: 5.0,
+        amortizationYears: 17.7,
+        termYears: 5
+      };
+
+      const schedule = generateMortgageSchedule(inputs, true, false);
+      // 17.7 years * 12 months/year = 212.4 months -> 213 payoff installments
+      expect(schedule.schedule.length).toBe(213);
+      expect(schedule.summary.paidOff).toBe(true);
+    });
+  });
 });
