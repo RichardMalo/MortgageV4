@@ -14,6 +14,7 @@ import { MortgageInputs } from '../src/core/types';
 
 const base = (patch: Partial<MortgageInputs> = {}): MortgageInputs => ({
   ...DEFAULT_INPUTS,
+  amortizationYears: 25,
   startDate: '2026-01-01',
   ...patch
 });

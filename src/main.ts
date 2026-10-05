@@ -8,7 +8,7 @@ import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/r
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
 import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.js';
 
-const STORAGE_KEY = 'truemortgage:v5';
+const STORAGE_KEY = 'truemortgage:v5.1';
 const TEXT_KEYS = new Set<keyof MortgageInputs>(['country', 'mode', 'frequency', 'startDate']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
