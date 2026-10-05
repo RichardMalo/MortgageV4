@@ -26,6 +26,7 @@ const loadState = (): MortgageInputs => {
 };
 
 let state: MortgageInputs = loadState();
+let scheduleView: 'yearly' | 'monthly' = 'yearly';
 let lastAnalysis: Analysis | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -179,18 +180,64 @@ const render = () => {
         .join('') + `<div class="total"><dt>Total</dt><dd>${money(a.monthlyHousingCost)}</dd></div>`;
   }
 
-  // Yearly schedule
-  $('schedule-body').innerHTML = a.years
-    .map(
-      (y) => `<tr>
-        <td>${y.year} <span class="muted">${y.endDate.getFullYear()}</span></td>
-        <td>${money(y.interest)}</td>
-        <td>${money(y.principal)}</td>
-        <td>${y.extra > 0 ? money(y.extra) : '—'}</td>
-        <td>${money(y.endBalance)}</td>
-      </tr>`
-    )
-    .join('');
+  // Schedule table (Yearly vs Monthly)
+  const isMonthly = scheduleView === 'monthly';
+  const theadRow = $('schedule-thead-row');
+  if (theadRow) {
+    theadRow.innerHTML = isMonthly
+      ? `<th>#</th>
+         <th>Date</th>
+         <th>Payment</th>
+         <th>Interest</th>
+         <th>Principal</th>
+         <th>Extra</th>
+         <th>Balance</th>`
+      : `<th>Year</th>
+         <th>Interest</th>
+         <th>Principal</th>
+         <th>Extra</th>
+         <th>Balance</th>`;
+  }
+
+  const scheduleTitle = $('schedule-title');
+  if (scheduleTitle) {
+    scheduleTitle.textContent = isMonthly ? 'Monthly schedule' : 'Yearly schedule';
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
+    const active = btn.dataset.scheduleView === scheduleView;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-checked', String(active));
+  });
+
+  const monthYearFmt = (d: Date) =>
+    d.toLocaleDateString(REGIONS[c].locale, { month: 'short', year: 'numeric' });
+
+  $('schedule-body').innerHTML = isMonthly
+    ? plan.rows
+        .map(
+          (r) => `<tr>
+            <td>${r.n}</td>
+            <td>${monthYearFmt(r.date)}</td>
+            <td>${money(r.scheduled + r.extra, true)}</td>
+            <td>${money(r.interest, true)}</td>
+            <td>${money(r.principal, true)}</td>
+            <td>${r.extra > 0 ? money(r.extra, true) : '—'}</td>
+            <td>${money(r.balance, true)}</td>
+          </tr>`
+        )
+        .join('')
+    : a.years
+        .map(
+          (y) => `<tr>
+            <td>${y.year} <span class="muted">${y.endDate.getFullYear()}</span></td>
+            <td>${money(y.interest)}</td>
+            <td>${money(y.principal)}</td>
+            <td>${y.extra > 0 ? money(y.extra) : '—'}</td>
+            <td>${money(y.endBalance)}</td>
+          </tr>`
+        )
+        .join('');
 };
 
 const escapeHtml = (s: string) =>
@@ -308,6 +355,17 @@ const bind = () => {
   document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) =>
     b.addEventListener('click', () => update({ mode: b.dataset.mode as MortgageInputs['mode'] }))
   );
+
+  document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation(); // prevent toggling the parent <details> summary
+      const view = btn.dataset.scheduleView as 'yearly' | 'monthly';
+      if (view && view !== scheduleView) {
+        scheduleView = view;
+        render();
+      }
+    });
+  });
 
   $('btn-reset').addEventListener('click', () => {
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };

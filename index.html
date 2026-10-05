@@ -229,12 +229,20 @@
           </div>
         </div>
 
-        <details class="card schedule">
-          <summary class="card-title">Yearly schedule</summary>
+        <details class="card schedule" open>
+          <summary class="card-title">
+            <span class="schedule-summary-content">
+              <span id="schedule-title">Yearly schedule</span>
+              <div class="schedule-switch" role="radiogroup" aria-label="Schedule interval">
+                <button type="button" class="schedule-switch-btn active" data-schedule-view="yearly" role="radio" aria-checked="true">Yearly</button>
+                <button type="button" class="schedule-switch-btn" data-schedule-view="monthly" role="radio" aria-checked="false">Monthly</button>
+              </div>
+            </span>
+          </summary>
           <div class="table-wrap">
             <table>
               <thead>
-                <tr>
+                <tr id="schedule-thead-row">
                   <th>Year</th>
                   <th>Interest</th>
                   <th>Principal</th>

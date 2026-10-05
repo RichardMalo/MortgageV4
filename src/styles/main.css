@@ -550,15 +550,58 @@ input[type='number']::-webkit-outer-spin-button {
 .schedule > summary::-webkit-details-marker {
   display: none;
 }
-.schedule > summary::after {
-  content: ' ▸';
-  color: var(--muted);
+.schedule-summary-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
 }
-.schedule[open] > summary::after {
-  content: ' ▾';
+.schedule-summary-content::after {
+  content: '▸';
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-left: 4px;
+  transition: transform 0.15s ease;
+}
+.schedule[open] > summary .schedule-summary-content::after {
+  transform: rotate(90deg);
 }
 .schedule[open] > summary {
   margin-bottom: 12px;
+}
+.schedule-switch {
+  display: inline-flex;
+  align-items: center;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 2px;
+  gap: 2px;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.schedule-switch-btn {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  padding: 4px 12px;
+  border-radius: 9999px;
+  cursor: pointer;
+  line-height: 1.25;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+}
+.schedule-switch-btn:hover {
+  color: var(--text);
+}
+.schedule-switch-btn.active {
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06);
 }
 .table-wrap {
   max-height: 420px;
