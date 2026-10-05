@@ -113,9 +113,17 @@ body {
   align-items: start;
 }
 @media (max-width: 860px) {
+  body {
+    overflow-x: hidden;
+  }
+  .app-header {
+    padding: 12px 14px 4px;
+  }
   .layout {
     grid-template-columns: minmax(0, 1fr);
-    padding: 8px 12px 32px;
+    padding: 8px 10px 32px;
+    width: 100%;
+    overflow-x: hidden;
   }
 }
 
@@ -246,9 +254,12 @@ input[type='number']::-webkit-outer-spin-button {
   border: none;
   background: none;
   color: var(--muted);
-  padding: 8px;
+  padding: 8px 6px;
   border-radius: 8px;
   cursor: pointer;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.25;
 }
 .seg-btn.active {
   background: var(--card);
@@ -605,33 +616,35 @@ input[type='number']::-webkit-outer-spin-button {
 }
 .table-wrap {
   max-height: 420px;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid var(--border);
   border-radius: 10px;
+  -webkit-overflow-scrolling: touch;
 }
 table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.86rem;
   font-variant-numeric: tabular-nums;
 }
 th,
 td {
-  padding: 8px 12px;
-  text-align: right;
+  padding: 8px 10px;
   white-space: nowrap;
-}
-th:first-child,
-td:first-child {
-  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 thead th {
   position: sticky;
   top: 0;
   background: var(--card);
   color: var(--muted);
-  font-weight: 500;
+  font-weight: 600;
   border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 0 var(--border);
+  z-index: 2;
 }
 tbody tr:nth-child(even) {
   background: var(--input);
@@ -640,6 +653,177 @@ tbody tr:nth-child(even) {
   color: var(--muted);
   font-size: 0.78rem;
   margin-left: 4px;
+}
+
+/* Column alignments */
+th.col-num,
+td.col-num {
+  text-align: center;
+}
+th.col-date,
+td.col-date,
+th.col-year,
+td.col-year {
+  text-align: left;
+}
+th.col-payment,
+td.col-payment,
+th.col-interest,
+td.col-interest,
+th.col-principal,
+td.col-principal,
+th.col-extra,
+td.col-extra,
+th.col-balance,
+td.col-balance {
+  text-align: right;
+}
+
+/* Desktop & tablet column proportions */
+table[data-view="monthly"] th.col-num { width: 6%; }
+table[data-view="monthly"] th.col-date { width: 15%; }
+table[data-view="monthly"] th.col-payment { width: 16%; }
+table[data-view="monthly"] th.col-interest { width: 16%; }
+table[data-view="monthly"] th.col-principal { width: 16%; }
+table[data-view="monthly"] th.col-extra { width: 12%; }
+table[data-view="monthly"] th.col-balance { width: 19%; }
+
+table[data-view="yearly"] th.col-year { width: 16%; }
+table[data-view="yearly"] th.col-interest { width: 21%; }
+table[data-view="yearly"] th.col-principal { width: 21%; }
+table[data-view="yearly"] th.col-extra { width: 16%; }
+table[data-view="yearly"] th.col-balance { width: 26%; }
+
+.hdr-short {
+  display: none;
+}
+.hdr-full {
+  display: inline;
+}
+.date-yr-short {
+  display: none;
+}
+.date-yr-full {
+  display: inline;
+}
+
+/* Mobile responsive fitting: strictly fit all columns with NO horizontal scroll */
+@media (max-width: 600px) {
+  .layout {
+    padding: 8px 8px 32px;
+  }
+  .card.schedule {
+    padding: 12px 6px;
+  }
+  .table-wrap {
+    max-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden; /* strictly vertical scrolling only */
+    border-radius: 8px;
+    width: 100%;
+  }
+  table {
+    font-size: 0.68rem; /* compact, crisp, elegant tabular format */
+    line-height: 1.25;
+    letter-spacing: -0.025em;
+  }
+  th,
+  td {
+    padding: 5px 2px;
+  }
+  th:first-child,
+  td:first-child {
+    padding-left: 3px;
+  }
+  th:last-child,
+  td:last-child {
+    padding-right: 3px;
+  }
+
+  /* Compact date formatting on phones: "Nov '26" */
+  .date-yr-full {
+    display: none;
+  }
+  .date-yr-short {
+    display: inline;
+  }
+
+  /* All columns visible - NONE hidden */
+  th.col-num,
+  td.col-num,
+  th.col-date,
+  td.col-date,
+  th.col-payment,
+  td.col-payment,
+  th.col-interest,
+  td.col-interest,
+  th.col-principal,
+  td.col-principal,
+  th.col-extra,
+  td.col-extra,
+  th.col-balance,
+  td.col-balance,
+  th.col-year,
+  td.col-year {
+    display: table-cell !important;
+  }
+
+  /* Monthly column widths on phones (exact sum: 100%) */
+  table[data-view="monthly"] th.col-num { width: 7%; }
+  table[data-view="monthly"] th.col-date { width: 15%; }
+  table[data-view="monthly"] th.col-payment { width: 16%; }
+  table[data-view="monthly"] th.col-interest { width: 16%; }
+  table[data-view="monthly"] th.col-principal { width: 16%; }
+  table[data-view="monthly"] th.col-extra { width: 11%; }
+  table[data-view="monthly"] th.col-balance { width: 19%; }
+
+  /* Yearly column widths on phones (exact sum: 100%) */
+  table[data-view="yearly"] th.col-year { width: 16%; }
+  table[data-view="yearly"] th.col-interest { width: 21%; }
+  table[data-view="yearly"] th.col-principal { width: 21%; }
+  table[data-view="yearly"] th.col-extra { width: 15%; }
+  table[data-view="yearly"] th.col-balance { width: 27%; }
+
+  .schedule-summary-content {
+    gap: 6px;
+  }
+  .schedule-switch-btn {
+    font-size: 0.74rem;
+    padding: 3px 8px;
+  }
+  .card.schedule .btn {
+    width: 100%;
+    text-align: center;
+    font-size: 0.82rem;
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 360px) {
+  .card.schedule {
+    padding: 10px 4px;
+  }
+  table {
+    font-size: 0.62rem;
+    letter-spacing: -0.03em;
+  }
+  th,
+  td {
+    padding: 4px 1px;
+  }
+  .hdr-full {
+    display: none;
+  }
+  .hdr-short {
+    display: inline;
+  }
+}
+
+@media (max-width: 330px) {
+  table {
+    font-size: 0.56rem;
+    letter-spacing: -0.035em;
+  }
 }
 
 .btn {

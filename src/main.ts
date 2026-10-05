@@ -182,21 +182,26 @@ const render = () => {
 
   // Schedule table (Yearly vs Monthly)
   const isMonthly = scheduleView === 'monthly';
+  const table = $('schedule-table');
+  if (table) {
+    table.setAttribute('data-view', scheduleView);
+  }
+
   const theadRow = $('schedule-thead-row');
   if (theadRow) {
     theadRow.innerHTML = isMonthly
-      ? `<th>#</th>
-         <th>Date</th>
-         <th>Payment</th>
-         <th>Interest</th>
-         <th>Principal</th>
-         <th>Extra</th>
-         <th>Balance</th>`
-      : `<th>Year</th>
-         <th>Interest</th>
-         <th>Principal</th>
-         <th>Extra</th>
-         <th>Balance</th>`;
+      ? `<th class="col-num">#</th>
+         <th class="col-date">Date</th>
+         <th class="col-payment"><span class="hdr-full">Payment</span><span class="hdr-short">Pay</span></th>
+         <th class="col-interest"><span class="hdr-full">Interest</span><span class="hdr-short">Int</span></th>
+         <th class="col-principal"><span class="hdr-full">Principal</span><span class="hdr-short">Prin</span></th>
+         <th class="col-extra">Extra</th>
+         <th class="col-balance"><span class="hdr-full">Balance</span><span class="hdr-short">Bal</span></th>`
+      : `<th class="col-year">Year</th>
+         <th class="col-interest">Interest</th>
+         <th class="col-principal">Principal</th>
+         <th class="col-extra">Extra</th>
+         <th class="col-balance">Balance</th>`;
   }
 
   const scheduleTitle = $('schedule-title');
@@ -210,31 +215,31 @@ const render = () => {
     btn.setAttribute('aria-checked', String(active));
   });
 
-  const monthYearFmt = (d: Date) =>
-    d.toLocaleDateString(REGIONS[c].locale, { month: 'short', year: 'numeric' });
-
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
-        .map(
-          (r) => `<tr>
-            <td>${r.n}</td>
-            <td>${monthYearFmt(r.date)}</td>
-            <td>${money(r.scheduled + r.extra, true)}</td>
-            <td>${money(r.interest, true)}</td>
-            <td>${money(r.principal, true)}</td>
-            <td>${r.extra > 0 ? money(r.extra, true) : '—'}</td>
-            <td>${money(r.balance, true)}</td>
-          </tr>`
-        )
+        .map((r) => {
+          const m = r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short' });
+          const y = r.date.getFullYear();
+          const y2 = String(y).slice(-2);
+          return `<tr>
+            <td class="col-num">${r.n}</td>
+            <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span></td>
+            <td class="col-payment">${money(r.scheduled + r.extra, false)}</td>
+            <td class="col-interest">${money(r.interest, false)}</td>
+            <td class="col-principal">${money(r.principal, false)}</td>
+            <td class="col-extra">${r.extra > 0 ? money(r.extra, false) : '—'}</td>
+            <td class="col-balance">${money(r.balance, false)}</td>
+          </tr>`;
+        })
         .join('')
     : a.years
         .map(
           (y) => `<tr>
-            <td>${y.year} <span class="muted">${y.endDate.getFullYear()}</span></td>
-            <td>${money(y.interest)}</td>
-            <td>${money(y.principal)}</td>
-            <td>${y.extra > 0 ? money(y.extra) : '—'}</td>
-            <td>${money(y.endBalance)}</td>
+            <td class="col-year"><span class="year-num">${y.year}</span> <span class="year-date muted">${y.endDate.getFullYear()}</span></td>
+            <td class="col-interest">${money(y.interest)}</td>
+            <td class="col-principal">${money(y.principal)}</td>
+            <td class="col-extra">${y.extra > 0 ? money(y.extra) : '—'}</td>
+            <td class="col-balance">${money(y.endBalance)}</td>
           </tr>`
         )
         .join('');
