@@ -1,21 +1,16 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   base: './',
-  root: '.',
   publicDir: 'public',
   server: {
-    port: 5173,
-    open: false
+    port: 5173
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
-    target: 'esnext'
+    target: 'es2022'
   },
-  // @ts-expect-error vitest config
   test: {
-    globals: true,
-    environment: 'jsdom'
+    environment: 'node'
   }
 });
