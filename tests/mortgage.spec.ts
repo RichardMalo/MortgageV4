@@ -116,6 +116,89 @@ describe('paying it off faster', () => {
   });
 });
 
+describe('payment increase prepayment privilege (TD Payment Increase / RBC Double-Up)', () => {
+  it('when toggle is off, uses base payment and does not trigger strategy', () => {
+    const a = analyzeMortgage(base({ paymentIncreaseEnabled: false, customPayment: 5000 }));
+    expect(a.paymentIncrease).toBe(0);
+    expect(a.plan.regularPayment).toBe(a.basePayment);
+    expect(a.hasStrategy).toBe(false);
+  });
+
+  it('allows user to type an increased payment up to 2x (double the payment)', () => {
+    const standard = analyzeMortgage(base());
+    const basePmt = standard.basePayment;
+    const customPmt = Math.round(basePmt * 1.5 * 100) / 100;
+
+    const a = analyzeMortgage(base({ paymentIncreaseEnabled: true, customPayment: customPmt }));
+    expect(a.basePayment).toBe(basePmt);
+    expect(a.maxPayment).toBeCloseTo(basePmt * 2, 2);
+    expect(a.plan.regularPayment).toBeCloseTo(customPmt, 2);
+    expect(a.paymentIncrease).toBeCloseTo(customPmt - basePmt, 2);
+    expect(a.hasStrategy).toBe(true);
+    expect(a.interestSaved).toBeGreaterThan(0);
+    expect(a.monthsSaved).toBeGreaterThan(0);
+  });
+
+  it('caps user input at double the mortgage payment amount', () => {
+    const standard = analyzeMortgage(base());
+    const basePmt = standard.basePayment;
+    const doublePmt = standard.maxPayment;
+
+    // User types an amount way above double
+    const a = analyzeMortgage(base({ paymentIncreaseEnabled: true, customPayment: doublePmt + 2000 }));
+    expect(a.plan.regularPayment).toBe(doublePmt);
+    expect(a.paymentIncrease).toBeCloseTo(doublePmt - basePmt, 2);
+  });
+
+  it('treats custom payment lower than base payment as base payment (minimum payment)', () => {
+    const standard = analyzeMortgage(base());
+    const a = analyzeMortgage(base({ paymentIncreaseEnabled: true, customPayment: 100 }));
+    expect(a.plan.regularPayment).toBe(standard.basePayment);
+    expect(a.paymentIncrease).toBe(0);
+  });
+
+  it('prepayment privilege goes directly to principal reduction each payment', () => {
+    const standard = analyzeMortgage(base());
+    const double = analyzeMortgage(base({ paymentIncreaseEnabled: true, customPayment: standard.maxPayment }));
+
+    // Each period in double plan has the extra prepayment applied to principal
+    expect(double.plan.rows[0].extra).toBeCloseTo(standard.basePayment, 2);
+    expect(double.plan.totalInterest).toBeLessThan(standard.plan.totalInterest);
+    expect(double.plan.numPayments).toBeLessThan(standard.plan.numPayments);
+  });
+
+  it('is separate from and stacks with Pay it off faster extraMonthly', () => {
+    const standard = analyzeMortgage(base());
+    const incAmount = 500;
+    const fasterAmount = 200;
+
+    const a = analyzeMortgage(
+      base({
+        paymentIncreaseEnabled: true,
+        customPayment: standard.basePayment + incAmount,
+        extraMonthly: fasterAmount
+      })
+    );
+
+    expect(a.paymentIncrease).toBe(incAmount);
+    expect(a.inputs.extraMonthly).toBe(fasterAmount);
+    // Row 0 has both incAmount and extraMonthly applied
+    expect(a.plan.rows[0].extra).toBeCloseTo(incAmount + fasterAmount, 2);
+  });
+
+  it('adds an informational note explaining the active payment increase privilege', () => {
+    const standard = analyzeMortgage(base());
+    const a = analyzeMortgage(base({ paymentIncreaseEnabled: true, customPayment: standard.basePayment + 500 }));
+    expect(a.notes.some((n) => n.text.includes('Payment increase active') && n.text.includes('Double-Up'))).toBe(true);
+  });
+
+  it('sanitizes payment increase inputs', () => {
+    const s = sanitizeInputs({ paymentIncreaseEnabled: true as never, customPayment: -50 });
+    expect(s.paymentIncreaseEnabled).toBe(true);
+    expect(s.customPayment).toBe(0);
+  });
+});
+
 describe('Canada', () => {
   it('minimum down payment follows the Dec 2024 rules', () => {
     expect(canadianMinimumDown(400_000)).toBe(20_000);

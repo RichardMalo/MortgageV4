@@ -31,7 +31,7 @@ const num = (v: unknown, fallback: number): number => {
   const n = typeof v === 'number' ? v : parseFloat(String(v));
   return Number.isFinite(n) ? n : fallback;
 };
-const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
 /** Coerces any (possibly stale or hand-edited) input object into a valid one. */
 export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => {
@@ -51,6 +51,8 @@ export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => 
     startDate: /^\d{4}-\d{2}-\d{2}$/.test(raw.startDate || '') ? raw.startDate! : d.startDate,
     extraMonthly: clamp(num(raw.extraMonthly, 0), 0, 1e7),
     annualLumpSum: clamp(num(raw.annualLumpSum, 0), 0, 1e9),
+    paymentIncreaseEnabled: Boolean(raw.paymentIncreaseEnabled),
+    customPayment: clamp(num(raw.customPayment, 0), 0, 1e7),
     propertyTaxYearly: clamp(num(raw.propertyTaxYearly, 0), 0, 1e7),
     homeInsuranceYearly: clamp(num(raw.homeInsuranceYearly, 0), 0, 1e7),
     feesMonthly: clamp(num(raw.feesMonthly, 0), 0, 1e7),
@@ -112,6 +114,7 @@ export interface ScheduleParams {
   startDate: string;
   extraMonthly?: number;
   annualLumpSum?: number;
+  paymentIncrease?: number;
 }
 
 /** Required payment per period. Accelerated payments are the monthly payment ÷ 2 (bi-weekly) or ÷ 4 (weekly). */
@@ -133,10 +136,14 @@ export const regularPayment = (p: Omit<ScheduleParams, 'startDate'>): number => 
 /** Full payment-by-payment schedule. */
 export const buildSchedule = (p: ScheduleParams): ScheduleResult => {
   const perYear = FREQUENCIES[p.frequency].perYear;
-  const payment = regularPayment(p);
+  const basePayment = regularPayment(p);
+  const paymentIncrease = Math.max(0, p.paymentIncrease || 0);
+  const effectivePayment = round2(basePayment + paymentIncrease);
+
   const empty: ScheduleResult = {
     rows: [],
     regularPayment: 0,
+    basePayment: 0,
     periodsPerYear: perYear,
     totalInterest: 0,
     totalPaid: 0,
@@ -159,9 +166,10 @@ export const buildSchedule = (p: ScheduleParams): ScheduleResult => {
   for (let n = 1; n <= lastScheduled && balance > 0; n++) {
     const interest = round2(balance * r);
     const owing = round2(balance + interest);
-    let scheduled = payment;
+    let scheduled = basePayment;
     // Lump sum lands on each loan anniversary (last payment of every loan year).
-    let extra = round2(extraPerPeriod + (n % perYear === 0 ? lump : 0));
+    // Payment increase prepayment privilege (TD Payment Increase / RBC Double-Up) adds directly to principal.
+    let extra = round2(extraPerPeriod + paymentIncrease + (n % perYear === 0 ? lump : 0));
 
     if (n === lastScheduled || scheduled >= owing) {
       // Final payment clears whatever is left (absorbs cent-rounding drift).
@@ -182,7 +190,8 @@ export const buildSchedule = (p: ScheduleParams): ScheduleResult => {
 
   return {
     rows,
-    regularPayment: payment,
+    regularPayment: effectivePayment,
+    basePayment,
     periodsPerYear: perYear,
     totalInterest: round2(totalInterest),
     totalPaid: round2(totalPaid),
@@ -307,11 +316,25 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
     years: inputs.amortizationYears,
     startDate: inputs.startDate
   };
+
+  const basePayment = regularPayment({
+    ...common,
+    frequency: inputs.frequency
+  });
+  const maxPayment = round2(basePayment * 2);
+
+  let paymentIncrease = 0;
+  if (inputs.paymentIncreaseEnabled && loanAmount > 0 && inputs.customPayment && inputs.customPayment > basePayment) {
+    const clampedCustom = round2(clamp(inputs.customPayment, basePayment, maxPayment));
+    paymentIncrease = round2(clampedCustom - basePayment);
+  }
+
   const plan = buildSchedule({
     ...common,
     frequency: inputs.frequency,
     extraMonthly: inputs.extraMonthly,
-    annualLumpSum: inputs.annualLumpSum
+    annualLumpSum: inputs.annualLumpSum,
+    paymentIncrease
   });
   const baseline = buildSchedule({ ...common, frequency: 'monthly' });
 
@@ -342,6 +365,15 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
     });
   }
 
+  if (inputs.paymentIncreaseEnabled && paymentIncrease > 0) {
+    notes.push({
+      level: 'info',
+      text: `Payment increase active: paying an extra ${money(paymentIncrease)} each payment (${money(
+        paymentIncrease * plan.periodsPerYear
+      )}/year) directly toward principal (TD Payment Increase / RBC Double-Up privilege).`
+    });
+  }
+
   if (inputs.amortizationYears > 30) {
     notes.push({ level: 'info', text: 'Amortizations longer than 30 years are uncommon and greatly increase total interest.' });
   }
@@ -356,7 +388,11 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
     });
   }
 
-  const hasStrategy = inputs.frequency !== 'monthly' || inputs.extraMonthly > 0 || inputs.annualLumpSum > 0;
+  const hasStrategy =
+    inputs.frequency !== 'monthly' ||
+    inputs.extraMonthly > 0 ||
+    inputs.annualLumpSum > 0 ||
+    paymentIncrease > 0;
   const baselineMonths = baseline.numPayments;
   const planMonths = (plan.numPayments * 12) / plan.periodsPerYear;
   const monthlyEquivalent = round2((plan.regularPayment * plan.periodsPerYear) / 12);
@@ -380,6 +416,9 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
     monthlyEquivalent,
     monthlyHousingCost,
     years: summarizeByYear(plan),
-    notes
+    notes,
+    basePayment,
+    maxPayment,
+    paymentIncrease
   };
 };

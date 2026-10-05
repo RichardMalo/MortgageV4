@@ -3,7 +3,7 @@
  * One form in, one analysis out. All math lives in ./core/mortgage.ts.
  */
 
-import { analyzeMortgage, sanitizeInputs } from './core/mortgage.js';
+import { analyzeMortgage, clamp, sanitizeInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
 import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.js';
@@ -121,10 +121,54 @@ const render = () => {
   const hasLoan = a.loanAmount > 0 && plan.numPayments > 0;
 
   // Hero
-  $('out-payment').textContent = hasLoan ? money(plan.regularPayment, true) : money(0);
-  $('out-frequency').textContent = FREQUENCIES[state.frequency].noun;
+  const enabled = Boolean(state.paymentIncreaseEnabled);
+  const toggleEl = $<HTMLInputElement>('toggle-payment-increase');
+  if (toggleEl) {
+    if (toggleEl.checked !== enabled) toggleEl.checked = enabled;
+    toggleEl.disabled = !hasLoan;
+    toggleEl.setAttribute('aria-checked', String(enabled));
+  }
+
+  const staticDisplay = $('hero-display-static');
+  const inputWrap = $('hero-input-wrap');
+  const increaseBar = $('hero-increase-bar');
+  const outFreq = $('out-frequency');
+  const outFreqEditable = $('out-frequency-editable');
+
+  const freqNoun = FREQUENCIES[state.frequency].noun;
+  if (outFreq) outFreq.textContent = freqNoun;
+  if (outFreqEditable) outFreqEditable.textContent = freqNoun;
+
+  const showEditable = enabled && hasLoan;
+  if (staticDisplay) staticDisplay.hidden = showEditable;
+  if (inputWrap) inputWrap.hidden = !showEditable;
+  if (increaseBar) increaseBar.hidden = !showEditable;
+
+  if (hasLoan) {
+    $('out-payment').textContent = money(plan.regularPayment, true);
+    if (showEditable) {
+      const customInput = $<HTMLInputElement>('in-payment-increase');
+      if (customInput) {
+        customInput.min = String(a.basePayment);
+        customInput.max = String(a.maxPayment);
+        const currentVal =
+          state.customPayment && state.customPayment >= a.basePayment
+            ? state.customPayment
+            : a.basePayment;
+        setField(customInput, fmtNum(currentVal));
+      }
+      $('hero-min-payment').textContent = money(a.basePayment, true);
+      $('hero-max-payment').textContent = money(a.maxPayment, true);
+    }
+  } else {
+    $('out-payment').textContent = money(0);
+  }
+
   const sub: string[] = [];
   if (hasLoan && state.frequency !== 'monthly') sub.push(`≈ ${money(a.monthlyEquivalent)} per month`);
+  if (hasLoan && a.paymentIncrease > 0) {
+    sub.push(`Base: ${money(a.basePayment, true)} · ${money(a.paymentIncrease, true)} extra to principal`);
+  }
   if (hasLoan && state.extraMonthly > 0) sub.push(`plus ${money(state.extraMonthly)}/month extra`);
   if (!hasLoan) sub.push('Enter a loan amount to see your payment.');
   $('out-hero-sub').textContent = sub.join(' · ');
@@ -371,6 +415,75 @@ const bind = () => {
       }
     });
   });
+
+  const toggleEl = $<HTMLInputElement>('toggle-payment-increase');
+  if (toggleEl) {
+    toggleEl.addEventListener('change', () => {
+      const enabled = toggleEl.checked;
+      const patch: Partial<MortgageInputs> = { paymentIncreaseEnabled: enabled };
+      if (enabled && lastAnalysis) {
+        const baseVal = lastAnalysis.basePayment;
+        const maxVal = lastAnalysis.maxPayment;
+        if (!state.customPayment || state.customPayment < baseVal || state.customPayment > maxVal) {
+          patch.customPayment = baseVal;
+        }
+      }
+      update(patch);
+      if (enabled) {
+        const input = $<HTMLInputElement>('in-payment-increase');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    });
+  }
+
+  const customInput = $<HTMLInputElement>('in-payment-increase');
+  if (customInput) {
+    customInput.addEventListener('input', () => {
+      const val = parseFloat(customInput.value);
+      if (Number.isFinite(val)) {
+        if (lastAnalysis && val > lastAnalysis.maxPayment) {
+          customInput.value = fmtNum(lastAnalysis.maxPayment);
+          update({ customPayment: lastAnalysis.maxPayment });
+        } else {
+          update({ customPayment: val });
+        }
+      }
+    });
+
+    customInput.addEventListener('blur', () => {
+      if (lastAnalysis) {
+        const val = parseFloat(customInput.value);
+        const clamped = clamp(
+          Number.isFinite(val) ? val : lastAnalysis.basePayment,
+          lastAnalysis.basePayment,
+          lastAnalysis.maxPayment
+        );
+        customInput.value = fmtNum(clamped);
+        update({ customPayment: clamped });
+      }
+    });
+  }
+
+  const applyChip = (calc: (base: number, max: number) => number) => {
+    if (lastAnalysis) {
+      const val = calc(lastAnalysis.basePayment, lastAnalysis.maxPayment);
+      const input = $<HTMLInputElement>('in-payment-increase');
+      if (input) setField(input, fmtNum(val));
+      update({ customPayment: val });
+    }
+  };
+
+  $('chip-base')?.addEventListener('click', () => applyChip((base) => base));
+  $('chip-plus-10')?.addEventListener('click', () =>
+    applyChip((base, max) => Math.min(max, Math.round(base * 1.1 * 100) / 100))
+  );
+  $('chip-plus-25')?.addEventListener('click', () =>
+    applyChip((base, max) => Math.min(max, Math.round(base * 1.25 * 100) / 100))
+  );
+  $('chip-double')?.addEventListener('click', () => applyChip((_, max) => max));
 
   $('btn-reset').addEventListener('click', () => {
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };

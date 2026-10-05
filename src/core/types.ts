@@ -41,6 +41,10 @@ export interface MortgageInputs {
   extraMonthly: number;
   annualLumpSum: number;
 
+  /** Payment increase prepayment privilege (TD Payment Increase / RBC Double-Up) */
+  paymentIncreaseEnabled?: boolean;
+  customPayment?: number;
+
   /** Other housing costs (optional, informational — they do not reduce the loan) */
   propertyTaxYearly: number;
   homeInsuranceYearly: number;
@@ -66,6 +70,7 @@ export interface PaymentRow {
 export interface ScheduleResult {
   rows: PaymentRow[];
   regularPayment: number;
+  basePayment?: number;
   periodsPerYear: number;
   totalInterest: number;
   totalPaid: number;
@@ -120,4 +125,10 @@ export interface Analysis {
   monthlyHousingCost: number;
   years: YearRow[];
   notes: Note[];
+  /** Base contractual payment before any prepayment increase */
+  basePayment: number;
+  /** Maximum payment allowed under the privilege (2× basePayment) */
+  maxPayment: number;
+  /** Extra payment per period from payment increase privilege */
+  paymentIncrease: number;
 }

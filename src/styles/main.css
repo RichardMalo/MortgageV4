@@ -330,16 +330,133 @@ input[type='number']::-webkit-outer-spin-button {
   border: none;
   padding: 22px;
 }
+.hero-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .hero-label {
   font-size: 0.9rem;
-  opacity: 0.85;
+  opacity: 0.9;
+  font-weight: 500;
 }
+.hero-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+.hero-toggle:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.hero-toggle-text {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.hero-toggle input[type='checkbox'] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.hero-toggle-track {
+  display: inline-block;
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s;
+}
+.hero-toggle-thumb {
+  display: block;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hero-toggle input:checked ~ .hero-toggle-track {
+  background: #10b981;
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.hero-toggle input:checked ~ .hero-toggle-track .hero-toggle-thumb {
+  transform: translateX(14px);
+}
+.hero-toggle input:focus-visible ~ .hero-toggle-track {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.hero-toggle[disabled],
+.hero-toggle input:disabled ~ .hero-toggle-track {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .hero-amount {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: clamp(2rem, 5vw, 2.8rem);
   font-weight: 700;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hero-display-static {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.hero-input-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hero-currency {
+  font-size: clamp(1.8rem, 4.5vw, 2.4rem);
+  font-weight: 700;
+  opacity: 0.95;
+}
+.hero-payment-input {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  color: #fff;
+  font-family: inherit;
+  font-size: clamp(1.8rem, 4.5vw, 2.5rem);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  padding: 2px 10px;
+  width: 210px;
+  max-width: 100%;
+  font-variant-numeric: tabular-nums;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+.hero-payment-input:focus {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: #fff;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.35);
+  outline: none;
 }
 .hero-freq {
   font-size: 1rem;
@@ -347,8 +464,63 @@ input[type='number']::-webkit-outer-spin-button {
   opacity: 0.85;
   letter-spacing: 0;
 }
+
+.hero-increase-bar {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.hero-range-hint {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hero-range-hint strong {
+  color: #fff;
+}
+.badge-double {
+  background: rgba(255, 255, 255, 0.22);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.hero-quick-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.hero-chip {
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  border-radius: 14px;
+  padding: 2px 9px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, transform 0.1s;
+}
+.hero-chip:hover {
+  background: rgba(255, 255, 255, 0.32);
+  border-color: #fff;
+}
+.hero-chip:active {
+  transform: scale(0.96);
+}
+
 .hero-sub {
-  margin-top: 4px;
+  margin-top: 6px;
   font-size: 0.92rem;
   opacity: 0.9;
 }

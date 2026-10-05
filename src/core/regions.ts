@@ -98,6 +98,8 @@ export const DEFAULT_INPUTS: MortgageInputs = {
   startDate: defaultStartDate(),
   extraMonthly: 0,
   annualLumpSum: 0,
+  paymentIncreaseEnabled: false,
+  customPayment: 0,
   propertyTaxYearly: 0,
   homeInsuranceYearly: 0,
   feesMonthly: 0,

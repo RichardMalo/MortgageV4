@@ -173,8 +173,50 @@
       <!-- ================= RESULTS ================= -->
       <section class="results" aria-live="polite">
         <div class="card hero">
-          <div class="hero-label">Your mortgage payment</div>
-          <div class="hero-amount"><span id="out-payment">—</span> <span class="hero-freq" id="out-frequency"></span></div>
+          <div class="hero-top">
+            <div class="hero-label">Your mortgage payment</div>
+            <label class="hero-toggle" for="toggle-payment-increase" title="TD Payment Increase / RBC Double-Up privilege">
+              <span class="hero-toggle-text">Increase payment</span>
+              <input type="checkbox" id="toggle-payment-increase" role="switch" aria-label="Increase payment up to double" />
+              <span class="hero-toggle-track" aria-hidden="true">
+                <span class="hero-toggle-thumb"></span>
+              </span>
+            </label>
+          </div>
+
+          <div class="hero-amount">
+            <span class="hero-display-static" id="hero-display-static">
+              <span id="out-payment">—</span>
+              <span class="hero-freq" id="out-frequency"></span>
+            </span>
+            <div class="hero-input-wrap" id="hero-input-wrap" hidden>
+              <span class="hero-currency" data-currency>$</span>
+              <input
+                type="number"
+                id="in-payment-increase"
+                class="hero-payment-input"
+                inputmode="decimal"
+                step="10"
+                aria-label="Custom mortgage payment"
+              />
+              <span class="hero-freq" id="out-frequency-editable"></span>
+            </div>
+          </div>
+
+          <div class="hero-increase-bar" id="hero-increase-bar" hidden>
+            <div class="hero-range-hint">
+              <span>Base: <strong id="hero-min-payment">—</strong></span>
+              <span class="range-sep" aria-hidden="true">·</span>
+              <span>Max: <strong id="hero-max-payment">—</strong> <span class="badge-double">2× Double-Up</span></span>
+            </div>
+            <div class="hero-quick-chips">
+              <button type="button" class="hero-chip" id="chip-base" title="Reset to calculated base payment">Base</button>
+              <button type="button" class="hero-chip" id="chip-plus-10" title="Add 10% to payment">+10%</button>
+              <button type="button" class="hero-chip" id="chip-plus-25" title="Add 25% to payment">+25%</button>
+              <button type="button" class="hero-chip" id="chip-double" title="Double payment (2×)">Double-Up (2×)</button>
+            </div>
+          </div>
+
           <div class="hero-sub" id="out-hero-sub"></div>
         </div>
 
