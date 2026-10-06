@@ -18,6 +18,7 @@
   --error: #dc2626;
   --error-soft: rgba(220, 38, 38, 0.1);
   --radius: 14px;
+  --control-h: 46px;
   --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.05);
   color-scheme: light dark;
 }
@@ -134,6 +135,11 @@ body {
   box-shadow: var(--shadow);
   padding: 18px;
 }
+@media (max-width: 640px) {
+  .card {
+    padding: 16px;
+  }
+}
 .card-title {
   font-weight: 600;
   font-size: 0.95rem;
@@ -167,7 +173,7 @@ body {
 }
 .row-2 {
   display: flex;
-  gap: 10px;
+  gap: 12px;
 }
 .grow {
   flex: 1;
@@ -177,25 +183,36 @@ body {
 .input-wrap {
   display: flex;
   align-items: center;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  max-height: var(--control-h);
   background: var(--input);
   border: 1px solid var(--border);
   border-radius: 10px;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.input-wrap:hover:not(:focus-within) {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--muted) 40%);
 }
 .input-wrap:focus-within {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .input-wrap.pct {
-  width: 92px;
+  width: 96px;
   flex: none;
 }
 .prefix,
 .suffix {
   color: var(--muted);
-  font-size: 0.9rem;
-  padding: 0 10px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  padding: 0 12px;
   white-space: nowrap;
+  user-select: none;
+  display: flex;
+  align-items: center;
 }
 .prefix {
   padding-right: 0;
@@ -207,29 +224,115 @@ body {
 input,
 select {
   font: inherit;
+  font-size: 1rem;
+  line-height: normal;
   color: var(--text);
   width: 100%;
   min-width: 0;
-  padding: 10px 12px;
-  border: none;
-  background: transparent;
+  box-sizing: border-box;
   outline: none;
 }
 .input-wrap input {
+  height: 100%;
+  padding: 0 14px;
+  border: none;
+  background: transparent;
+}
+.input-wrap .prefix + input {
   padding-left: 6px;
 }
-select,
-.field > input[type='date'] {
-  background: var(--input);
+.input-wrap input:has(+ .suffix) {
+  padding-right: 6px;
+}
+.input-wrap.pct input {
+  padding-left: 12px;
+  padding-right: 4px;
+}
+
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  max-height: var(--control-h);
+  box-sizing: border-box;
+  background-color: var(--input);
   border: 1px solid var(--border);
   border-radius: 10px;
+  padding: 0 38px 0 14px;
   cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
-select:focus,
+select:hover:not(:focus) {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--muted) 40%);
+}
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+@media (prefers-color-scheme: dark) {
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  }
+}
+
+input[type='date'],
+.field > input[type='date'] {
+  appearance: none;
+  -webkit-appearance: none;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  max-height: var(--control-h);
+  box-sizing: border-box;
+  background-color: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0 14px;
+  cursor: pointer;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+input[type='date']:hover:not(:focus),
+.field > input[type='date']:hover:not(:focus) {
+  border-color: color-mix(in srgb, var(--border) 60%, var(--muted) 40%);
+}
+input[type='date']:focus,
 .field > input[type='date']:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+input[type='date']::-webkit-date-and-time-value {
+  text-align: left;
+  line-height: normal;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+input[type='date']::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+  padding: 0;
+  margin: 0 0 0 auto;
+  transition: opacity 0.15s ease;
+}
+input[type='date']::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+@media (prefers-color-scheme: dark) {
+  input[type='date']::-webkit-calendar-picker-indicator {
+    filter: invert(0.8);
+  }
+}
+
 input[type='number'] {
   -moz-appearance: textfield;
   appearance: textfield;
@@ -243,29 +346,44 @@ input[type='number']::-webkit-outer-spin-button {
 .segmented {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  height: var(--control-h);
+  min-height: var(--control-h);
+  max-height: var(--control-h);
+  box-sizing: border-box;
   background: var(--input);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 3px;
+  gap: 3px;
 }
 .seg-btn {
+  height: 100%;
   font: inherit;
   font-size: 0.88rem;
+  font-weight: 500;
   border: none;
   background: none;
   color: var(--muted);
-  padding: 8px 6px;
-  border-radius: 8px;
+  padding: 0 8px;
+  border-radius: 7px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   text-align: center;
   white-space: normal;
-  line-height: 1.25;
+  line-height: 1.2;
+  user-select: none;
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+.seg-btn:hover:not(.active) {
+  color: var(--text);
 }
 .seg-btn.active {
   background: var(--card);
   color: var(--text);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .hint {
@@ -729,6 +847,7 @@ input[type='number']::-webkit-outer-spin-button {
   cursor: pointer;
   margin: 0;
   list-style: none;
+  user-select: none;
 }
 .schedule > summary::-webkit-details-marker {
   display: none;
@@ -740,18 +859,26 @@ input[type='number']::-webkit-outer-spin-button {
   width: 100%;
   gap: 12px;
 }
-.schedule-summary-content::after {
+.schedule-summary-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  letter-spacing: -0.01em;
+}
+.schedule-summary-title::before {
   content: '▸';
   color: var(--muted);
   font-size: 0.85rem;
-  margin-left: 4px;
   transition: transform 0.15s ease;
+  display: inline-block;
 }
-.schedule[open] > summary .schedule-summary-content::after {
+.schedule[open] > summary .schedule-summary-title::before {
   transform: rotate(90deg);
 }
 .schedule[open] > summary {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .schedule-switch {
   display: inline-flex;
@@ -762,22 +889,23 @@ input[type='number']::-webkit-outer-spin-button {
   padding: 2px;
   gap: 2px;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+  flex-shrink: 0;
 }
 .schedule-switch-btn {
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
   border: none;
   background: transparent;
   color: var(--muted);
-  padding: 4px 12px;
+  padding: 4px 14px;
   border-radius: 9999px;
   cursor: pointer;
   line-height: 1.25;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
 }
-.schedule-switch-btn:hover {
+.schedule-switch-btn:hover:not(.active) {
   color: var(--text);
 }
 .schedule-switch-btn.active {
@@ -786,27 +914,42 @@ input[type='number']::-webkit-outer-spin-button {
   font-weight: 600;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1), 0 1px 2px rgba(15, 23, 42, 0.06);
 }
+
 .table-wrap {
   max-height: 420px;
   overflow-y: auto;
-  overflow-x: hidden;
+  overflow-x: auto;
   border: 1px solid var(--border);
   border-radius: 10px;
   -webkit-overflow-scrolling: touch;
+  background: var(--card);
 }
+.table-wrap::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.table-wrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+.table-wrap::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.table-wrap::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
 table {
   width: 100%;
-  table-layout: fixed;
   border-collapse: collapse;
   font-size: 0.86rem;
   font-variant-numeric: tabular-nums;
+  line-height: 1.35;
 }
 th,
 td {
-  padding: 8px 10px;
+  padding: 9px 12px;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 thead th {
   position: sticky;
@@ -814,12 +957,17 @@ thead th {
   background: var(--card);
   color: var(--muted);
   font-weight: 600;
+  font-size: 0.8rem;
+  letter-spacing: -0.01em;
   border-bottom: 1px solid var(--border);
   box-shadow: 0 1px 0 var(--border);
-  z-index: 2;
+  z-index: 3;
 }
 tbody tr:nth-child(even) {
   background: var(--input);
+}
+tbody tr:hover {
+  background: var(--accent-soft);
 }
 .muted {
   color: var(--muted);
@@ -852,26 +1000,28 @@ td.col-balance {
 }
 
 /* Desktop & tablet column proportions */
+table[data-view="yearly"] {
+  table-layout: fixed;
+  width: 100%;
+}
+table[data-view="yearly"] th.col-year { width: 18%; }
+table[data-view="yearly"] th.col-interest { width: 20%; }
+table[data-view="yearly"] th.col-principal { width: 20%; }
+table[data-view="yearly"] th.col-extra { width: 16%; }
+table[data-view="yearly"] th.col-balance { width: 26%; }
+
+table[data-view="monthly"] {
+  table-layout: fixed;
+  width: 100%;
+}
 table[data-view="monthly"] th.col-num { width: 6%; }
 table[data-view="monthly"] th.col-date { width: 15%; }
 table[data-view="monthly"] th.col-payment { width: 16%; }
 table[data-view="monthly"] th.col-interest { width: 16%; }
 table[data-view="monthly"] th.col-principal { width: 16%; }
-table[data-view="monthly"] th.col-extra { width: 12%; }
-table[data-view="monthly"] th.col-balance { width: 19%; }
+table[data-view="monthly"] th.col-extra { width: 13%; }
+table[data-view="monthly"] th.col-balance { width: 18%; }
 
-table[data-view="yearly"] th.col-year { width: 16%; }
-table[data-view="yearly"] th.col-interest { width: 21%; }
-table[data-view="yearly"] th.col-principal { width: 21%; }
-table[data-view="yearly"] th.col-extra { width: 16%; }
-table[data-view="yearly"] th.col-balance { width: 26%; }
-
-.hdr-short {
-  display: none;
-}
-.hdr-full {
-  display: inline;
-}
 .date-yr-short {
   display: none;
 }
@@ -879,37 +1029,15 @@ table[data-view="yearly"] th.col-balance { width: 26%; }
   display: inline;
 }
 
-/* Mobile responsive fitting: strictly fit all columns with NO horizontal scroll */
-@media (max-width: 600px) {
-  .layout {
-    padding: 8px 8px 32px;
-  }
+/* Responsive Table & Layout: Prada-level fluidity */
+@media (max-width: 640px) {
   .card.schedule {
-    padding: 12px 6px;
+    padding: 16px;
   }
   .table-wrap {
-    max-height: 400px;
-    overflow-y: auto;
-    overflow-x: hidden; /* strictly vertical scrolling only */
+    max-height: 420px;
     border-radius: 8px;
     width: 100%;
-  }
-  table {
-    font-size: 0.68rem; /* compact, crisp, elegant tabular format */
-    line-height: 1.25;
-    letter-spacing: -0.025em;
-  }
-  th,
-  td {
-    padding: 5px 2px;
-  }
-  th:first-child,
-  td:first-child {
-    padding-left: 3px;
-  }
-  th:last-child,
-  td:last-child {
-    padding-right: 3px;
   }
 
   /* Compact date formatting on phones: "Nov '26" */
@@ -920,97 +1048,112 @@ table[data-view="yearly"] th.col-balance { width: 26%; }
     display: inline;
   }
 
-  /* All columns visible - NONE hidden */
-  th.col-num,
-  td.col-num,
-  th.col-date,
-  td.col-date,
-  th.col-payment,
-  td.col-payment,
-  th.col-interest,
-  td.col-interest,
-  th.col-principal,
-  td.col-principal,
-  th.col-extra,
-  td.col-extra,
-  th.col-balance,
-  td.col-balance,
-  th.col-year,
-  td.col-year {
-    display: table-cell !important;
+  /* Yearly schedule fits 100% width on phone */
+  table[data-view="yearly"] {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.8rem;
+  }
+  table[data-view="yearly"] th,
+  table[data-view="yearly"] td {
+    padding: 8px 6px;
+  }
+  table[data-view="yearly"] th.col-year { width: 18%; }
+  table[data-view="yearly"] th.col-interest { width: 20%; }
+  table[data-view="yearly"] th.col-principal { width: 20%; }
+  table[data-view="yearly"] th.col-extra { width: 16%; }
+  table[data-view="yearly"] th.col-balance { width: 26%; }
+
+  /* Monthly schedule: ample width to prevent truncation, with sticky # and Date */
+  table[data-view="monthly"] {
+    width: max-content;
+    min-width: 580px;
+    table-layout: auto;
+    font-size: 0.82rem;
+  }
+  table[data-view="monthly"] th,
+  table[data-view="monthly"] td {
+    padding: 8px 10px;
+    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
   }
 
-  /* Monthly column widths on phones (exact sum: 100%) */
-  table[data-view="monthly"] th.col-num { width: 7%; }
-  table[data-view="monthly"] th.col-date { width: 15%; }
-  table[data-view="monthly"] th.col-payment { width: 16%; }
-  table[data-view="monthly"] th.col-interest { width: 16%; }
-  table[data-view="monthly"] th.col-principal { width: 16%; }
-  table[data-view="monthly"] th.col-extra { width: 11%; }
-  table[data-view="monthly"] th.col-balance { width: 19%; }
+  /* Sticky # column */
+  table[data-view="monthly"] th.col-num,
+  table[data-view="monthly"] td.col-num {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background: var(--card);
+    width: 36px;
+    min-width: 36px;
+    padding-left: 8px;
+    padding-right: 6px;
+  }
+  /* Sticky Date column with clean separator shadow */
+  table[data-view="monthly"] th.col-date,
+  table[data-view="monthly"] td.col-date {
+    position: sticky;
+    left: 36px;
+    z-index: 2;
+    background: var(--card);
+    box-shadow: 1px 0 0 var(--border);
+    padding-right: 12px;
+  }
 
-  /* Yearly column widths on phones (exact sum: 100%) */
-  table[data-view="yearly"] th.col-year { width: 16%; }
-  table[data-view="yearly"] th.col-interest { width: 21%; }
-  table[data-view="yearly"] th.col-principal { width: 21%; }
-  table[data-view="yearly"] th.col-extra { width: 15%; }
-  table[data-view="yearly"] th.col-balance { width: 27%; }
+  /* Keep top-left headers on highest z-index when both scrolling horizontally & vertically */
+  table[data-view="monthly"] thead th.col-num,
+  table[data-view="monthly"] thead th.col-date {
+    z-index: 5;
+    background: var(--card);
+  }
+
+  /* Preserve alternate row background on sticky columns */
+  table[data-view="monthly"] tbody tr:nth-child(even) td.col-num,
+  table[data-view="monthly"] tbody tr:nth-child(even) td.col-date {
+    background: var(--input);
+  }
+  table[data-view="monthly"] tbody tr:hover td.col-num,
+  table[data-view="monthly"] tbody tr:hover td.col-date {
+    background: var(--accent-soft);
+  }
 
   .schedule-summary-content {
-    gap: 6px;
+    gap: 8px;
   }
   .schedule-switch-btn {
-    font-size: 0.74rem;
-    padding: 3px 8px;
+    font-size: 0.76rem;
+    padding: 3px 10px;
   }
   .card.schedule .btn {
     width: 100%;
     text-align: center;
-    font-size: 0.82rem;
-    padding: 8px 10px;
-  }
-}
-
-@media (max-width: 360px) {
-  .card.schedule {
-    padding: 10px 4px;
-  }
-  table {
-    font-size: 0.62rem;
-    letter-spacing: -0.03em;
-  }
-  th,
-  td {
-    padding: 4px 1px;
-  }
-  .hdr-full {
-    display: none;
-  }
-  .hdr-short {
-    display: inline;
-  }
-}
-
-@media (max-width: 330px) {
-  table {
-    font-size: 0.56rem;
-    letter-spacing: -0.035em;
+    font-size: 0.85rem;
+    padding: 9px 12px;
   }
 }
 
 .btn {
-  margin-top: 12px;
+  margin-top: 14px;
   font: inherit;
   font-size: 0.88rem;
-  padding: 9px 14px;
+  font-weight: 500;
+  padding: 10px 16px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input);
   color: var(--text);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
 }
 .btn:hover {
   border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .disclaimer {

@@ -236,11 +236,11 @@ const render = () => {
     theadRow.innerHTML = isMonthly
       ? `<th class="col-num">#</th>
          <th class="col-date">Date</th>
-         <th class="col-payment"><span class="hdr-full">Payment</span><span class="hdr-short">Pay</span></th>
-         <th class="col-interest"><span class="hdr-full">Interest</span><span class="hdr-short">Int</span></th>
-         <th class="col-principal"><span class="hdr-full">Principal</span><span class="hdr-short">Prin</span></th>
+         <th class="col-payment">Payment</th>
+         <th class="col-interest">Interest</th>
+         <th class="col-principal">Principal</th>
          <th class="col-extra">Extra</th>
-         <th class="col-balance"><span class="hdr-full">Balance</span><span class="hdr-short">Bal</span></th>`
+         <th class="col-balance">Balance</th>`
       : `<th class="col-year">Year</th>
          <th class="col-interest">Interest</th>
          <th class="col-principal">Principal</th>
