@@ -35,25 +35,34 @@ export interface ChartThemeColors {
 }
 
 export const getThemeColors = (): ChartThemeColors => {
-  const isDark =
-    typeof window !== 'undefined' &&
-    (window.matchMedia('(prefers-color-scheme: dark)').matches ||
-      document.documentElement.classList.contains('dark'));
+  let isDark = false;
+  if (typeof window !== 'undefined') {
+    const attr = document.documentElement.getAttribute('data-theme');
+    if (attr === 'dark') {
+      isDark = true;
+    } else if (attr === 'light') {
+      isDark = false;
+    } else {
+      isDark =
+        window.matchMedia('(prefers-color-scheme: dark)').matches ||
+        document.documentElement.classList.contains('dark');
+    }
+  }
 
   return {
     isDark,
-    textColor: isDark ? '#e2e8f0' : '#0f172a',
+    textColor: isDark ? '#f1f5f9' : '#0f172a',
     mutedColor: isDark ? '#94a3b8' : '#64748b',
-    gridColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.07)',
-    cardBg: isDark ? '#131c2e' : '#ffffff',
+    gridColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)',
+    cardBg: isDark ? '#11141c' : '#ffffff',
     accentColor: isDark ? '#60a5fa' : '#2563eb',
-    accentSoft: isDark ? 'rgba(96, 165, 250, 0.18)' : 'rgba(37, 99, 235, 0.12)',
-    extraColor: '#10b981',
-    extraHover: '#34d399',
-    principalColor: '#2563eb',
-    principalHover: '#3b82f6',
-    interestColor: '#ef4444',
-    interestHover: '#f87171',
+    accentSoft: isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(37, 99, 235, 0.1)',
+    extraColor: isDark ? '#34d399' : '#059669',
+    extraHover: isDark ? '#6ee7b7' : '#10b981',
+    principalColor: isDark ? '#60a5fa' : '#2563eb',
+    principalHover: isDark ? '#93c5fd' : '#3b82f6',
+    interestColor: isDark ? '#fb7185' : '#e11d48',
+    interestHover: isDark ? '#fda4af' : '#be123c',
     baselineColor: isDark ? '#94a3b8' : '#64748b'
   };
 };
@@ -884,6 +893,13 @@ export class MortgageChartsManager {
       this.viewport.scrollLeft = targetLeft;
     });
     this.resizeObserver.observe(this.viewport);
+
+    // System theme change listener
+    window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener('change', () => {
+      if (!document.documentElement.getAttribute('data-theme')) {
+        this.drawAll();
+      }
+    });
 
     // Hide tooltip on tap outside or window scroll
     window.addEventListener('scroll', () => this.hideTooltip(), { passive: true });

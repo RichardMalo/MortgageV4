@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TrueMortgage — Simple Mortgage Calculator</title>
+    <title>TrueMortgage — Atelier Mortgage Calculator</title>
     <meta
       name="description"
-      content="A simple, private mortgage calculator. See your payment, total interest, payoff date, and how extra payments help. Runs entirely in your browser."
+      content="A bespoke, private mortgage calculator. Architectural precision, amortization schedules, prepayment privileges, and real calendar savings. 100% client-side."
     />
     <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#090b10" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/x-icon" href="./favicon.ico" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <link rel="manifest" href="./manifest.json" />
@@ -17,10 +19,52 @@
   <body>
     <header class="app-header">
       <div class="brand">
-        <span class="brand-logo" aria-hidden="true">⌂</span>
-        <span class="brand-name">TrueMortgage</span>
+        <div class="brand-emblem" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 10.5L12 3l9 7.5" />
+            <path d="M5 9.5V20a1 1 0 001 1h12a1 1 0 001-1V9.5" />
+            <path d="M9 21V12h6v9" />
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-name">TRUE MORTGAGE</span>
+          <span class="brand-tag">ATELIER · ED. 5.0</span>
+        </div>
       </div>
-      <button id="btn-reset" class="btn-link" type="button">Reset</button>
+      <div class="header-actions">
+        <button id="btn-share" class="btn-header" type="button" title="Share mortgage plan link" aria-label="Share plan">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+          <span class="btn-text">Share</span>
+        </button>
+        <button id="btn-theme" class="btn-header icon-only" type="button" title="Toggle color theme" aria-label="Toggle theme">
+          <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" />
+            <line x1="12" y1="1" x2="12" y2="3" />
+            <line x1="12" y1="21" x2="12" y2="23" />
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+            <line x1="1" y1="12" x2="3" y2="12" />
+            <line x1="21" y1="12" x2="23" y2="12" />
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+          </svg>
+          <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+          </svg>
+        </button>
+        <button id="btn-print" class="btn-header icon-only" type="button" title="Print client statement" aria-label="Print statement">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <polyline points="6 9 6 2 18 2 18 9" />
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+            <rect x="6" y="14" width="12" height="8" />
+          </svg>
+        </button>
+        <button id="btn-reset" class="btn-link" type="button">Reset</button>
+      </div>
     </header>
 
     <main class="layout">
@@ -51,7 +95,10 @@
           </div>
 
           <div class="field">
-            <label for="in-down">Down payment</label>
+            <div class="field-header">
+              <label for="in-down">Down payment</label>
+              <span class="ltv-tag" id="ltv-badge">—</span>
+            </div>
             <div class="row-2">
               <div class="input-wrap grow">
                 <span class="prefix" data-currency>$</span>
@@ -61,6 +108,14 @@
                 <input id="in-down-pct" type="number" inputmode="decimal" min="0" max="100" step="0.5" aria-label="Down payment percent" />
                 <span class="suffix">%</span>
               </div>
+            </div>
+            <div class="quick-pills" id="down-quick-pills">
+              <span class="quick-pill-label">Presets</span>
+              <button type="button" class="micro-pill" data-down-pct="5">5%</button>
+              <button type="button" class="micro-pill" data-down-pct="10">10%</button>
+              <button type="button" class="micro-pill" data-down-pct="15">15%</button>
+              <button type="button" class="micro-pill" data-down-pct="20">20%</button>
+              <button type="button" class="micro-pill" data-down-pct="25">25%</button>
             </div>
           </div>
         </div>
@@ -77,7 +132,13 @@
 
         <div class="row-2">
           <div class="field grow">
-            <label for="in-rate">Interest rate</label>
+            <div class="field-header">
+              <label for="in-rate">Interest rate</label>
+              <div class="stepper-micro">
+                <button type="button" class="stepper-btn" id="btn-rate-minus" title="Rate −0.25%" aria-label="Decrease rate 0.25%">−</button>
+                <button type="button" class="stepper-btn" id="btn-rate-plus" title="Rate +0.25%" aria-label="Increase rate 0.25%">+</button>
+              </div>
+            </div>
             <div class="input-wrap">
               <input id="in-rate" data-key="annualRate" type="number" inputmode="decimal" min="0" max="30" step="0.05" />
               <span class="suffix">%</span>
@@ -90,6 +151,13 @@
               <span class="suffix">years</span>
             </div>
           </div>
+        </div>
+        <div class="quick-pills amort-pills">
+          <span class="quick-pill-label">Years</span>
+          <button type="button" class="micro-pill" data-amort="15">15y</button>
+          <button type="button" class="micro-pill" data-amort="20">20y</button>
+          <button type="button" class="micro-pill" data-amort="25">25y</button>
+          <button type="button" class="micro-pill" data-amort="30">30y</button>
         </div>
         <p class="hint" id="compounding-hint"></p>
 
@@ -174,7 +242,7 @@
       <section class="results" aria-live="polite">
         <div class="card hero">
           <div class="hero-top">
-            <div class="hero-label">Your mortgage payment</div>
+            <div class="hero-label">YOUR MORTGAGE PAYMENT</div>
             <label class="hero-toggle" for="toggle-payment-increase" title="TD Payment Increase / RBC Double-Up privilege">
               <span class="hero-toggle-text">Increase payment</span>
               <input type="checkbox" id="toggle-payment-increase" role="switch" aria-label="Increase payment up to double" />
@@ -224,10 +292,12 @@
           <div class="card stat">
             <div class="stat-label">Loan amount</div>
             <div class="stat-value" id="out-loan">—</div>
+            <div class="stat-foot" id="out-loan-sub"></div>
           </div>
           <div class="card stat">
             <div class="stat-label">Total interest</div>
             <div class="stat-value" id="out-interest">—</div>
+            <div class="stat-foot" id="out-interest-sub"></div>
           </div>
           <div class="card stat">
             <div class="stat-label">Mortgage-free</div>
@@ -237,7 +307,11 @@
         </div>
 
         <div class="card savings" id="savings-card" hidden>
-          <div class="savings-icon" aria-hidden="true">✓</div>
+          <div class="savings-icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          </div>
           <div>
             <div class="savings-title" id="out-savings-title"></div>
             <div class="savings-sub">Compared with regular monthly payments and no extras.</div>
@@ -348,15 +422,35 @@
               <tbody id="schedule-body"></tbody>
             </table>
           </div>
-          <button type="button" class="btn" id="btn-csv">Download full schedule (CSV)</button>
+          <div class="schedule-actions">
+            <button type="button" class="btn" id="btn-csv">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="7 10 12 15 17 10" />
+                <line x1="12" y1="15" x2="12" y2="3" />
+              </svg>
+              <span>Download full schedule (CSV)</span>
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-print-table">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="6 9 6 2 18 2 18 9" />
+                <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+                <rect x="6" y="14" width="12" height="8" />
+              </svg>
+              <span>Print Statement</span>
+            </button>
+          </div>
         </details>
 
         <p class="disclaimer">
           Estimates only. Your lender's figures may differ slightly due to rounding, fees, and rate changes at renewal.
-          Everything runs in your browser — nothing is sent anywhere.
+          Everything runs in your browser — zero tracking or cloud storage.
         </p>
       </section>
     </main>
+
+    <!-- Floating Toast Notification -->
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script type="module" src="./src/main.ts"></script>
   </body>

@@ -10,13 +10,48 @@ import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.
 import { MortgageChartsManager } from './charts/mortgage-charts.js';
 
 const STORAGE_KEY = 'truemortgage:v5.1';
+const THEME_KEY = 'truemortgage:theme';
 const TEXT_KEYS = new Set<keyof MortgageInputs>(['country', 'mode', 'frequency', 'startDate']);
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-// ---------- state ----------
+// ---------- state & url serialization ----------
+
+/** Parses URL search params into Partial<MortgageInputs> if present. */
+const loadFromUrl = (): Partial<MortgageInputs> | null => {
+  if (typeof window === 'undefined' || !window.location.search) return null;
+  const p = new URLSearchParams(window.location.search);
+  const patch: Partial<MortgageInputs> = {};
+
+  if (p.has('country')) patch.country = p.get('country') as Country;
+  if (p.has('mode')) patch.mode = p.get('mode') as MortgageInputs['mode'];
+  if (p.has('price')) patch.homePrice = parseFloat(p.get('price') || '');
+  if (p.has('down')) patch.downPayment = parseFloat(p.get('down') || '');
+  if (p.has('balance')) patch.currentBalance = parseFloat(p.get('balance') || '');
+  if (p.has('rate')) patch.annualRate = parseFloat(p.get('rate') || '');
+  if (p.has('years')) patch.amortizationYears = parseFloat(p.get('years') || '');
+  if (p.has('freq')) patch.frequency = p.get('freq') as MortgageInputs['frequency'];
+  if (p.has('start')) patch.startDate = p.get('start') || undefined;
+  if (p.has('extra')) patch.extraMonthly = parseFloat(p.get('extra') || '');
+  if (p.has('lump')) patch.annualLumpSum = parseFloat(p.get('lump') || '');
+  if (p.has('custom')) {
+    patch.paymentIncreaseEnabled = true;
+    patch.customPayment = parseFloat(p.get('custom') || '');
+  }
+  if (p.has('tax')) patch.propertyTaxYearly = parseFloat(p.get('tax') || '');
+  if (p.has('ins')) patch.homeInsuranceYearly = parseFloat(p.get('ins') || '');
+  if (p.has('fees')) patch.feesMonthly = parseFloat(p.get('fees') || '');
+  if (p.has('pmi')) patch.pmiRate = parseFloat(p.get('pmi') || '');
+
+  return Object.keys(patch).length > 0 ? patch : null;
+};
 
 const loadState = (): MortgageInputs => {
+  const urlState = loadFromUrl();
+  if (urlState) {
+    return sanitizeInputs({ ...DEFAULT_INPUTS, startDate: defaultStartDate(), ...urlState });
+  }
+
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return sanitizeInputs(JSON.parse(raw));
@@ -49,6 +84,52 @@ const update = (patch: Partial<MortgageInputs>) => {
   render();
 };
 
+// ---------- theme management ----------
+
+const initTheme = () => {
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === 'dark' || saved === 'light') {
+      document.documentElement.setAttribute('data-theme', saved);
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+    }
+  } catch {
+    /* ignore */
+  }
+};
+
+const toggleTheme = () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  const isDark = current === 'dark' || (!current && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  const next = isDark ? 'light' : 'dark';
+
+  document.documentElement.setAttribute('data-theme', next);
+  try {
+    localStorage.setItem(THEME_KEY, next);
+  } catch {
+    /* ignore */
+  }
+
+  chartsManager?.drawAll();
+};
+
+// ---------- toast notifications ----------
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+const showToast = (message: string) => {
+  const toast = $('toast');
+  if (!toast) return;
+
+  clearTimeout(toastTimer);
+  toast.textContent = message;
+  toast.hidden = false;
+
+  toastTimer = setTimeout(() => {
+    toast.hidden = true;
+  }, 2800);
+};
+
 // ---------- form sync ----------
 
 const currencySymbol = (country: Country) => {
@@ -67,7 +148,21 @@ const fmtNum = (n: number) => (Number.isFinite(n) ? String(Math.round(n * 100) /
 
 const syncDownPct = () => {
   const pct = state.homePrice > 0 ? (state.downPayment / state.homePrice) * 100 : 0;
-  setField($<HTMLInputElement>('in-down-pct'), fmtNum(Math.round(pct * 10) / 10));
+  const rounded = Math.round(pct * 10) / 10;
+  setField($<HTMLInputElement>('in-down-pct'), fmtNum(rounded));
+
+  // Sync active state of down payment micro-pills
+  document.querySelectorAll<HTMLButtonElement>('[data-down-pct]').forEach((pill) => {
+    const pVal = parseFloat(pill.dataset.downPct || '0');
+    pill.classList.toggle('active', Math.abs(rounded - pVal) < 0.2);
+  });
+};
+
+const syncAmortPills = () => {
+  document.querySelectorAll<HTMLButtonElement>('[data-amort]').forEach((pill) => {
+    const yVal = parseInt(pill.dataset.amort || '0', 10);
+    pill.classList.toggle('active', state.amortizationYears === yVal);
+  });
 };
 
 /** Writes state into every form control (skipping the one being typed in). */
@@ -79,6 +174,7 @@ const syncForm = () => {
     setField(el, isOptionalZero ? '' : typeof v === 'number' ? fmtNum(v) : String(v));
   });
   syncDownPct();
+  syncAmortPills();
 };
 
 /** Shows/hides mode- and country-specific fields and localises labels. */
@@ -101,11 +197,14 @@ const syncVisibility = () => {
 
   const hints: string[] = [];
   if (region.compounding === 'semi-annual') {
-    hints.push('Canadian fixed rates compound semi-annually — this is applied automatically.');
+    hints.push('Canadian fixed rates compound semi-annually — applied automatically.');
   }
   if (state.frequency.startsWith('accelerated')) {
-    hints.push('Accelerated = your monthly payment split in ' + (state.frequency === 'accelerated-weekly' ? '4' : '2') +
-      ', which adds roughly one extra monthly payment per year.');
+    hints.push(
+      'Accelerated = your monthly payment split in ' +
+        (state.frequency === 'accelerated-weekly' ? '4' : '2') +
+        ', which adds roughly one extra monthly payment per year.'
+    );
   }
   $('compounding-hint').textContent = hints.join(' ');
 };
@@ -121,6 +220,21 @@ const render = () => {
   const { plan } = a;
 
   const hasLoan = a.loanAmount > 0 && plan.numPayments > 0;
+
+  // LTV Badge
+  const ltvBadge = $('ltv-badge');
+  if (ltvBadge) {
+    if (state.mode === 'purchase' && state.homePrice > 0) {
+      const ltv = ((state.homePrice - state.downPayment) / state.homePrice) * 100;
+      let status = 'Conventional';
+      if (ltv > 80) {
+        status = c === 'CA' ? 'Insured (CMHC)' : c === 'US' ? 'PMI Required' : 'High LTV';
+      }
+      ltvBadge.textContent = `${ltv.toFixed(1)}% LTV · ${status}`;
+    } else {
+      ltvBadge.textContent = '';
+    }
+  }
 
   // Hero
   const enabled = Boolean(state.paymentIncreaseEnabled);
@@ -177,7 +291,23 @@ const render = () => {
 
   // Stats
   $('out-loan').textContent = money(a.loanAmount);
+  const loanSub = $('out-loan-sub');
+  if (loanSub) {
+    if (state.mode === 'purchase') {
+      const ltv = state.homePrice > 0 ? ((a.loanAmount / state.homePrice) * 100).toFixed(0) : '0';
+      loanSub.textContent = `${ltv}% LTV · ${money(state.downPayment)} down`;
+    } else {
+      loanSub.textContent = 'Existing balance';
+    }
+  }
+
   $('out-interest').textContent = money(plan.totalInterest);
+  const intSub = $('out-interest-sub');
+  if (intSub) {
+    const intPct = a.loanAmount > 0 ? Math.round((plan.totalInterest / a.loanAmount) * 100) : 0;
+    intSub.textContent = `${intPct}% of loan balance`;
+  }
+
   $('out-payoff').textContent = formatMonthYear(plan.payoffDate, c);
   $('out-payoff-time').textContent = hasLoan ? `in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}` : '';
 
@@ -264,6 +394,22 @@ const render = () => {
     btn.setAttribute('aria-checked', String(active));
   });
 
+  // Calculate landmark milestone years
+  let tippingYear = -1;
+  let halfEquityYear = -1;
+  const initialPrincipal = a.loanAmount;
+
+  if (!isMonthly && a.years) {
+    for (const yr of a.years) {
+      if (tippingYear === -1 && yr.principal >= yr.interest) {
+        tippingYear = yr.year;
+      }
+      if (halfEquityYear === -1 && yr.endBalance <= initialPrincipal * 0.5) {
+        halfEquityYear = yr.year;
+      }
+    }
+  }
+
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
         .map((r) => {
@@ -282,24 +428,44 @@ const render = () => {
         })
         .join('')
     : a.years
-        .map(
-          (y) => `<tr>
-            <td class="col-year"><span class="year-num">${y.year}</span> <span class="year-date muted">${y.endDate.getFullYear()}</span></td>
+        .map((y, idx) => {
+          const isLast = idx === a.years.length - 1;
+          const badges: string[] = [];
+
+          if (y.year === 5 && !isLast) {
+            badges.push('<span class="milestone-badge milestone-renewal">5-Yr Term</span>');
+          }
+          if (y.year === tippingYear && !isLast) {
+            badges.push('<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>');
+          }
+          if (y.year === halfEquityYear && !isLast && y.year !== tippingYear) {
+            badges.push('<span class="milestone-badge milestone-half">50% Equity</span>');
+          }
+          if (isLast) {
+            badges.push('<span class="milestone-badge milestone-free">★ Free</span>');
+          }
+
+          const rowClass = badges.length > 0 ? 'milestone-row' : '';
+
+          return `<tr class="${rowClass}">
+            <td class="col-year">
+              <span class="year-num">${y.year}</span>
+              <span class="year-date muted">${y.endDate.getFullYear()}</span>
+              ${badges.join('')}
+            </td>
             <td class="col-interest">${money(y.interest)}</td>
             <td class="col-principal">${money(y.principal)}</td>
             <td class="col-extra">${y.extra > 0 ? money(y.extra) : '—'}</td>
             <td class="col-balance">${money(y.endBalance)}</td>
-          </tr>`
-        )
+          </tr>`;
+        })
         .join('');
 };
 
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
-
-
-// ---------- CSV ----------
+// ---------- CSV & Share ----------
 
 const downloadCsv = () => {
   const a = lastAnalysis;
@@ -307,21 +473,66 @@ const downloadCsv = () => {
   const lines = ['Payment #,Date,Payment,Interest,Principal,Extra,Balance'];
   for (const r of a.plan.rows) {
     lines.push(
-      [r.n, isoDate(r.date), (r.scheduled + r.extra).toFixed(2), r.interest.toFixed(2), r.principal.toFixed(2), r.extra.toFixed(2), r.balance.toFixed(2)].join(',')
+      [
+        r.n,
+        isoDate(r.date),
+        (r.scheduled + r.extra).toFixed(2),
+        r.interest.toFixed(2),
+        r.principal.toFixed(2),
+        r.extra.toFixed(2),
+        r.balance.toFixed(2)
+      ].join(',')
     );
   }
   const blob = new Blob([lines.join('\n')], { type: 'text/csv' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'mortgage-schedule.csv';
+  link.download = 'true-mortgage-schedule.csv';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showToast('Schedule CSV downloaded');
+};
+
+const sharePlan = () => {
+  const url = new URL(window.location.origin + window.location.pathname);
+  url.searchParams.set('country', state.country);
+  url.searchParams.set('mode', state.mode);
+  if (state.mode === 'purchase') {
+    url.searchParams.set('price', String(state.homePrice));
+    url.searchParams.set('down', String(state.downPayment));
+  } else {
+    url.searchParams.set('balance', String(state.currentBalance));
+  }
+  url.searchParams.set('rate', String(state.annualRate));
+  url.searchParams.set('years', String(state.amortizationYears));
+  url.searchParams.set('freq', state.frequency);
+  url.searchParams.set('start', state.startDate);
+  if (state.extraMonthly > 0) url.searchParams.set('extra', String(state.extraMonthly));
+  if (state.annualLumpSum > 0) url.searchParams.set('lump', String(state.annualLumpSum));
+  if (state.paymentIncreaseEnabled && state.customPayment) {
+    url.searchParams.set('custom', String(state.customPayment));
+  }
+  if (state.propertyTaxYearly > 0) url.searchParams.set('tax', String(state.propertyTaxYearly));
+  if (state.homeInsuranceYearly > 0) url.searchParams.set('ins', String(state.homeInsuranceYearly));
+  if (state.feesMonthly > 0) url.searchParams.set('fees', String(state.feesMonthly));
+
+  // Copy to clipboard
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(url.toString()).then(
+      () => showToast('Mortgage plan link copied to clipboard'),
+      () => showToast('Could not copy link to clipboard')
+    );
+  } else {
+    window.history.replaceState(null, '', url.toString());
+    showToast('Plan link updated in address bar');
+  }
 };
 
 // ---------- events ----------
 
 const bind = () => {
+  // Input fields
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]').forEach((el) => {
     const key = el.dataset.key as keyof MortgageInputs;
     const handler = () => {
@@ -333,9 +544,9 @@ const bind = () => {
         update({ [key]: Number.isFinite(n) ? n : 0 } as Partial<MortgageInputs>);
       }
       if (key === 'homePrice' || key === 'downPayment') syncDownPct();
+      if (key === 'amortizationYears') syncAmortPills();
     };
     el.addEventListener(el.tagName === 'SELECT' || el.getAttribute('type') === 'date' ? 'change' : 'input', handler);
-    // Tidy the field (e.g. clamped values) once the user leaves it.
     el.addEventListener('blur', () => {
       state = sanitizeInputs(state);
       syncForm();
@@ -343,6 +554,7 @@ const bind = () => {
     });
   });
 
+  // Down payment percentage input
   $<HTMLInputElement>('in-down-pct').addEventListener('input', (e) => {
     const pct = parseFloat((e.target as HTMLInputElement).value);
     const down = Math.round((state.homePrice * (Number.isFinite(pct) ? pct : 0)) / 100);
@@ -350,10 +562,50 @@ const bind = () => {
     setField($<HTMLInputElement>('in-down'), String(down));
   });
 
+  // Down payment preset micro-pills
+  document.querySelectorAll<HTMLButtonElement>('[data-down-pct]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const pct = parseFloat(pill.dataset.downPct || '0');
+      if (Number.isFinite(pct) && state.homePrice > 0) {
+        const down = Math.round((state.homePrice * pct) / 100);
+        update({ downPayment: down });
+        setField($<HTMLInputElement>('in-down'), String(down));
+        syncDownPct();
+      }
+    });
+  });
+
+  // Amortization preset micro-pills
+  document.querySelectorAll<HTMLButtonElement>('[data-amort]').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      const years = parseInt(pill.dataset.amort || '0', 10);
+      if (years >= 1 && years <= 40) {
+        update({ amortizationYears: years });
+        setField($<HTMLInputElement>('in-amort'), String(years));
+        syncAmortPills();
+      }
+    });
+  });
+
+  // Rate micro-steppers
+  $('btn-rate-minus')?.addEventListener('click', () => {
+    const nextRate = Math.max(0, Math.round((state.annualRate - 0.25) * 100) / 100);
+    update({ annualRate: nextRate });
+    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate));
+  });
+
+  $('btn-rate-plus')?.addEventListener('click', () => {
+    const nextRate = Math.min(30, Math.round((state.annualRate + 0.25) * 100) / 100);
+    update({ annualRate: nextRate });
+    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate));
+  });
+
+  // Mode switcher
   document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) =>
     b.addEventListener('click', () => update({ mode: b.dataset.mode as MortgageInputs['mode'] }))
   );
 
+  // Schedule view switch
   document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation(); // prevent toggling the parent <details> summary
@@ -365,6 +617,7 @@ const bind = () => {
     });
   });
 
+  // Payment Increase Privilege
   const toggleEl = $<HTMLInputElement>('toggle-payment-increase');
   if (toggleEl) {
     toggleEl.addEventListener('change', () => {
@@ -434,18 +687,27 @@ const bind = () => {
   );
   $('chip-double')?.addEventListener('click', () => applyChip((_, max) => max));
 
+  // Reset
   $('btn-reset').addEventListener('click', () => {
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };
     save();
     syncForm();
     render();
+    showToast('Parameters reset to default');
   });
 
+  // Header actions
+  $('btn-share')?.addEventListener('click', sharePlan);
+  $('btn-theme')?.addEventListener('click', toggleTheme);
+  $('btn-print')?.addEventListener('click', () => window.print());
+  $('btn-print-table')?.addEventListener('click', () => window.print());
   $('btn-csv').addEventListener('click', downloadCsv);
+
   $('mortgage-form').addEventListener('submit', (e) => e.preventDefault());
 };
 
 window.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   syncForm();
   bind();
   render();

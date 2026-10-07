@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getNiceTicks, formatCompactMoney } from '../src/charts/mortgage-charts.js';
+import { getNiceTicks, formatCompactMoney, getThemeColors } from '../src/charts/mortgage-charts.js';
 
 describe('Chart Utilities', () => {
   describe('getNiceTicks', () => {
@@ -34,6 +34,21 @@ describe('Chart Utilities', () => {
       expect(formatCompactMoney(200_000, 'US')).toBe('$200k');
       expect(formatCompactMoney(1_000_000, 'CA')).toBe('$1M');
       expect(formatCompactMoney(1_500_000, 'UK')).toBe('£1.5M');
+    });
+  });
+
+  describe('getThemeColors', () => {
+    it('returns a complete theme palette structure', () => {
+      const colors = getThemeColors();
+      expect(colors).toHaveProperty('textColor');
+      expect(colors).toHaveProperty('mutedColor');
+      expect(colors).toHaveProperty('gridColor');
+      expect(colors).toHaveProperty('cardBg');
+      expect(colors).toHaveProperty('accentColor');
+      expect(colors).toHaveProperty('extraColor');
+      expect(colors).toHaveProperty('principalColor');
+      expect(colors).toHaveProperty('interestColor');
+      expect(colors).toHaveProperty('baselineColor');
     });
   });
 });
