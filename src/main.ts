@@ -7,6 +7,7 @@ import { analyzeMortgage, clamp, sanitizeInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
 import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.js';
+import { MortgageChartsManager } from './charts/mortgage-charts.js';
 
 const STORAGE_KEY = 'truemortgage:v5.1';
 const TEXT_KEYS = new Set<keyof MortgageInputs>(['country', 'mode', 'frequency', 'startDate']);
@@ -28,6 +29,7 @@ const loadState = (): MortgageInputs => {
 let state: MortgageInputs = loadState();
 let scheduleView: 'yearly' | 'monthly' = 'yearly';
 let lastAnalysis: Analysis | null = null;
+let chartsManager: MortgageChartsManager | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
 const save = () => {
@@ -194,8 +196,11 @@ const render = () => {
     .map((n) => `<li class="note ${n.level}">${escapeHtml(n.text)}</li>`)
     .join('');
 
-  // Chart
-  renderChart(a, hasLoan);
+  // Multi-graph carousel
+  if (!chartsManager) {
+    chartsManager = new MortgageChartsManager();
+  }
+  chartsManager.render(a, hasLoan);
 
   // Breakdown
   const totalPrincipal = a.loanAmount;
@@ -292,63 +297,7 @@ const render = () => {
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
-/** Balance-over-time line chart (inline SVG, no dependencies). */
-const renderChart = (a: Analysis, hasLoan: boolean) => {
-  const el = $('chart');
-  if (!hasLoan) {
-    el.innerHTML = '<div class="chart-empty">No balance to chart.</div>';
-    return;
-  }
-  const W = 640, H = 240, L = 56, R = 14, T = 12, B = 28;
-  const maxYears = Math.max(a.baseline.numPayments / 12, a.plan.numPayments / a.plan.periodsPerYear, 1);
-  const maxY = a.loanAmount;
-  const x = (yrs: number) => L + (yrs / maxYears) * (W - L - R);
-  const y = (bal: number) => T + (1 - bal / maxY) * (H - T - B);
 
-  const points = (s: ScheduleResult) => {
-    const pts: string[] = [`${x(0)},${y(a.loanAmount)}`];
-    const step = Math.max(1, Math.round(s.periodsPerYear / 4)); // quarterly resolution
-    s.rows.forEach((r, i) => {
-      if (r.n % step === 0 || i === s.rows.length - 1) pts.push(`${x(r.n / s.periodsPerYear).toFixed(1)},${y(r.balance).toFixed(1)}`);
-    });
-    return pts;
-  };
-
-  const planPts = points(a.plan);
-  const showBaseline = a.hasStrategy;
-  const basePts = showBaseline ? points(a.baseline) : [];
-  $('legend-baseline').hidden = !showBaseline;
-
-  const compact = new Intl.NumberFormat(REGIONS[state.country].locale, {
-    style: 'currency',
-    currency: REGIONS[state.country].currency,
-    notation: 'compact',
-    maximumFractionDigits: 1
-  });
-
-  const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxY);
-  const xStep = maxYears <= 10 ? 1 : maxYears <= 20 ? 2 : 5;
-  const xTicks: number[] = [];
-  for (let t = 0; t <= maxYears + 1e-9; t += xStep) xTicks.push(t);
-
-  const area = `M${planPts[0]} L${planPts.slice(1).join(' L')} L${planPts[planPts.length - 1]!.split(',')[0]},${y(0)} L${x(0)},${y(0)} Z`;
-
-  el.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Mortgage balance over time">
-      ${yTicks
-        .map(
-          (v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/>
-                  <text class="axis" x="${L - 8}" y="${y(v) + 4}" text-anchor="end">${compact.format(v)}</text>`
-        )
-        .join('')}
-      ${xTicks
-        .map((t) => `<text class="axis" x="${x(t)}" y="${H - 8}" text-anchor="middle">${t === 0 ? 'Now' : `${t}y`}</text>`)
-        .join('')}
-      ${showBaseline ? `<polyline class="line-base" points="${basePts.join(' ')}"/>` : ''}
-      <path class="area-plan" d="${area}"/>
-      <polyline class="line-plan" points="${planPts.join(' ')}"/>
-    </svg>`;
-};
 
 // ---------- CSV ----------
 

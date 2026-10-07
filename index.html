@@ -246,12 +246,63 @@
 
         <ul class="notes" id="notes"></ul>
 
-        <div class="card">
-          <div class="card-title">Balance over time</div>
-          <div id="chart" class="chart"></div>
-          <div class="legend" id="chart-legend">
-            <span><i class="swatch plan"></i>Your plan</span>
-            <span id="legend-baseline"><i class="swatch base"></i>Monthly, no extras</span>
+        <div class="card chart-card" id="chart-card">
+          <div class="chart-header">
+            <div class="chart-title-group">
+              <span class="card-title chart-active-title" id="chart-active-title">Balance over time</span>
+              <div class="chart-tabs" role="tablist" aria-label="Mortgage charts">
+                <button type="button" class="chart-tab-btn active" role="tab" aria-selected="true" data-tab="0">Balance</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="1">Lifetime</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="2">Cash Flow</button>
+              </div>
+            </div>
+            <button type="button" class="chart-expand-btn" id="chart-expand-btn" title="Enlarge chart" aria-label="Enlarge chart">+</button>
+          </div>
+
+          <div class="chart-carousel-viewport" id="chart-carousel-viewport" tabindex="0" aria-label="Swipeable mortgage charts">
+            <!-- Slide 0: Balance Over Time -->
+            <div class="chart-slide" data-slide="0">
+              <div id="chart-balance" class="chart-container"></div>
+              <div class="legend" id="chart-legend-balance">
+                <span><i class="swatch plan"></i>Your plan</span>
+                <span id="legend-baseline"><i class="swatch base"></i>Monthly, no extras</span>
+              </div>
+            </div>
+
+            <!-- Slide 1: Lifetime Breakdown -->
+            <div class="chart-slide" data-slide="1">
+              <div id="chart-lifetime" class="chart-container"></div>
+              <div class="legend chart-legend-breakdown" id="chart-legend-lifetime">
+                <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
+                <span class="legend-item" data-cat="principal"><i class="swatch chart-principal"></i>Principal</span>
+                <span class="legend-item" data-cat="interest"><i class="swatch chart-interest"></i>Interest</span>
+              </div>
+            </div>
+
+            <!-- Slide 2: Annual Cash Flow -->
+            <div class="chart-slide" data-slide="2">
+              <div id="chart-cashflow" class="chart-container"></div>
+              <div class="legend chart-legend-cashflow" id="chart-legend-cashflow">
+                <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
+                <span class="legend-item" data-cat="principal"><i class="swatch chart-principal"></i>Principal</span>
+                <span class="legend-item" data-cat="interest"><i class="swatch chart-interest"></i>Interest</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Carousel Footer: Next/Prev arrows and slide indicator dots -->
+          <div class="chart-footer">
+            <button type="button" class="chart-nav-btn prev" id="chart-prev-btn" aria-label="Previous graph" title="Previous graph">
+              ‹
+            </button>
+            <div class="chart-dots" role="tablist" aria-label="Chart slides">
+              <button type="button" class="chart-dot active" data-dot="0" aria-label="Go to Balance over time" aria-current="true"></button>
+              <button type="button" class="chart-dot" data-dot="1" aria-label="Go to Lifetime Breakdown" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="2" aria-label="Go to Annual Cash Flow" aria-current="false"></button>
+            </div>
+            <button type="button" class="chart-nav-btn next" id="chart-next-btn" aria-label="Next graph" title="Next graph">
+              ›
+            </button>
           </div>
         </div>
 
