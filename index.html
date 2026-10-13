@@ -326,8 +326,13 @@
               <span class="card-title chart-active-title" id="chart-active-title">Balance over time</span>
               <div class="chart-tabs" role="tablist" aria-label="Mortgage charts">
                 <button type="button" class="chart-tab-btn active" role="tab" aria-selected="true" data-tab="0">Balance</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="1">Lifetime</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="2">Cash Flow</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="1">Money Kept</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="2">Tipping Point</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="3">Extra Impact</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="4">Strategies</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="5">Cost of Waiting</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="6">Lifetime</button>
+                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="7">Cash Flow</button>
               </div>
             </div>
             <button type="button" class="chart-expand-btn" id="chart-expand-btn" title="Enlarge chart" aria-label="Enlarge chart">+</button>
@@ -335,7 +340,7 @@
 
           <div class="chart-carousel-viewport" id="chart-carousel-viewport" tabindex="0" aria-label="Swipeable mortgage charts">
             <!-- Slide 0: Balance Over Time -->
-            <div class="chart-slide" data-slide="0">
+            <div class="chart-slide" data-slide="0" data-chart="balance" data-title="Balance over time">
               <div id="chart-balance" class="chart-container"></div>
               <div class="legend" id="chart-legend-balance">
                 <span><i class="swatch plan"></i>Your plan</span>
@@ -343,8 +348,57 @@
               </div>
             </div>
 
-            <!-- Slide 1: Lifetime Breakdown -->
-            <div class="chart-slide" data-slide="1">
+            <!-- Slide 1: Money Kept (Cumulative Interest Race) -->
+            <div class="chart-slide" data-slide="1" data-chart="kept" data-title="Money Kept vs Baseline">
+              <div id="chart-kept" class="chart-container"></div>
+              <div class="legend" id="chart-legend-kept">
+                <span><i class="swatch interest"></i>Cumulative interest</span>
+                <span id="legend-kept-baseline"><i class="swatch base"></i>Without extras</span>
+                <span><i class="swatch extra"></i>Money kept (savings gap)</span>
+              </div>
+            </div>
+
+            <!-- Slide 2: Interest vs Principal Tipping Point -->
+            <div class="chart-slide" data-slide="2" data-chart="tipping" data-title="Principal vs Interest Tipping Point">
+              <div id="chart-tipping" class="chart-container"></div>
+              <div class="legend" id="chart-legend-tipping">
+                <span><i class="swatch chart-principal"></i>Principal / mo</span>
+                <span><i class="swatch chart-interest"></i>Interest / mo</span>
+                <span id="legend-tipping-baseline"><i class="swatch base"></i>Without extras (ghost)</span>
+              </div>
+            </div>
+
+            <!-- Slide 3: Extra Payment Sensitivity Curve -->
+            <div class="chart-slide" data-slide="3" data-chart="extra" data-title="Extra Payment Impact">
+              <div id="chart-extra" class="chart-container clickable"></div>
+              <div class="legend" id="chart-legend-extra">
+                <span><i class="swatch extra"></i>Interest saved</span>
+                <span><i class="swatch plan"></i>Years saved (dashed)</span>
+                <span class="legend-note">💡 Click any point on curve to apply</span>
+              </div>
+            </div>
+
+            <!-- Slide 4: Strategy Leaderboard -->
+            <div class="chart-slide" data-slide="4" data-chart="strategies" data-title="Strategy Comparison">
+              <div id="chart-strategies" class="chart-container clickable"></div>
+              <div class="legend" id="chart-legend-strategies">
+                <span><i class="swatch extra"></i>Interest saved</span>
+                <span><i class="swatch plan"></i>Your current plan</span>
+                <span class="legend-note">💡 Click any strategy bar to apply</span>
+              </div>
+            </div>
+
+            <!-- Slide 5: Cost of Waiting -->
+            <div class="chart-slide" data-slide="5" data-chart="waiting" data-title="Cost of Delaying Extra Payments">
+              <div id="chart-waiting" class="chart-container"></div>
+              <div class="legend" id="chart-legend-waiting">
+                <span><i class="swatch extra"></i>Interest saved if started</span>
+                <span><i class="swatch interest"></i>Savings lost by waiting (dashed)</span>
+              </div>
+            </div>
+
+            <!-- Slide 6: Lifetime Breakdown -->
+            <div class="chart-slide" data-slide="6" data-chart="lifetime" data-title="Lifetime Breakdown">
               <div id="chart-lifetime" class="chart-container"></div>
               <div class="legend chart-legend-breakdown" id="chart-legend-lifetime">
                 <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
@@ -353,8 +407,8 @@
               </div>
             </div>
 
-            <!-- Slide 2: Annual Cash Flow -->
-            <div class="chart-slide" data-slide="2">
+            <!-- Slide 7: Annual Cash Flow -->
+            <div class="chart-slide" data-slide="7" data-chart="cashflow" data-title="Annual Cash Flow">
               <div id="chart-cashflow" class="chart-container"></div>
               <div class="legend chart-legend-cashflow" id="chart-legend-cashflow">
                 <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
@@ -364,6 +418,9 @@
             </div>
           </div>
 
+          <!-- Dynamic actionable caption -->
+          <div class="chart-caption" id="chart-caption" aria-live="polite"></div>
+
           <!-- Carousel Footer: Next/Prev arrows and slide indicator dots -->
           <div class="chart-footer">
             <button type="button" class="chart-nav-btn prev" id="chart-prev-btn" aria-label="Previous graph" title="Previous graph">
@@ -371,8 +428,13 @@
             </button>
             <div class="chart-dots" role="tablist" aria-label="Chart slides">
               <button type="button" class="chart-dot active" data-dot="0" aria-label="Go to Balance over time" aria-current="true"></button>
-              <button type="button" class="chart-dot" data-dot="1" aria-label="Go to Lifetime Breakdown" aria-current="false"></button>
-              <button type="button" class="chart-dot" data-dot="2" aria-label="Go to Annual Cash Flow" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="1" aria-label="Go to Money Kept" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="2" aria-label="Go to Tipping Point" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="3" aria-label="Go to Extra Payment Impact" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="4" aria-label="Go to Strategy Comparison" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="5" aria-label="Go to Cost of Waiting" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="6" aria-label="Go to Lifetime Breakdown" aria-current="false"></button>
+              <button type="button" class="chart-dot" data-dot="7" aria-label="Go to Annual Cash Flow" aria-current="false"></button>
             </div>
             <button type="button" class="chart-nav-btn next" id="chart-next-btn" aria-label="Next graph" title="Next graph">
               ›

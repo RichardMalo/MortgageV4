@@ -328,7 +328,13 @@ const render = () => {
 
   // Multi-graph carousel
   if (!chartsManager) {
-    chartsManager = new MortgageChartsManager();
+    chartsManager = new MortgageChartsManager({
+      onApply: (action) => {
+        update(action.patch);
+        syncForm();
+        showToast(action.message);
+      }
+    });
   }
   chartsManager.render(a, hasLoan);
 

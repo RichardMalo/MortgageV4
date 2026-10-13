@@ -1157,20 +1157,30 @@ input[type='number']::-webkit-outer-spin-button {
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   gap: 2px;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chart-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .chart-tab-btn {
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 4px 12px;
+  padding: 4px 10px;
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
   transition: all 0.15s ease;
   line-height: 1.25;
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .chart-tab-btn:hover {
@@ -1233,15 +1243,42 @@ input[type='number']::-webkit-outer-spin-button {
     grid-column: 1 / -1;
     grid-row: 2;
     display: flex;
-    justify-content: stretch;
     width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    padding: 3px;
   }
   .chart-tab-btn {
-    flex: 1;
+    flex: 0 0 auto;
+    white-space: nowrap;
     text-align: center;
-    padding: 6px 4px;
-    font-size: 0.78rem;
+    padding: 6px 10px;
+    font-size: 0.75rem;
   }
+}
+
+.chart-caption {
+  margin: 12px 0 4px 0;
+  padding: 10px 14px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text);
+  letter-spacing: -0.01em;
+  transition: all 0.2s ease;
+}
+
+.chart-caption[hidden],
+.chart-caption:empty {
+  display: none !important;
+}
+
+.chart-caption strong {
+  color: var(--primary);
+  font-weight: 600;
 }
 
 .chart-carousel-viewport {
@@ -1278,6 +1315,10 @@ input[type='number']::-webkit-outer-spin-button {
   transition: height 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   cursor: crosshair;
   touch-action: pan-y;
+}
+
+.chart-container.clickable {
+  cursor: pointer;
 }
 
 #chart-card.expanded .chart-container {
@@ -1447,6 +1488,14 @@ input[type='number']::-webkit-outer-spin-button {
   margin-left: 2px;
 }
 
+.chart-floating-tooltip .tip-cta {
+  font-size: 0.74rem;
+  color: #38bdf8;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 2px;
+}
+
 /* Legends */
 .legend,
 .bar-legend {
@@ -1457,6 +1506,14 @@ input[type='number']::-webkit-outer-spin-button {
   margin-top: 10px;
   font-size: 0.82rem;
   color: var(--muted);
+}
+
+.legend-note {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
 }
 
 .legend-item {

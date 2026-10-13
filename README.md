@@ -28,10 +28,18 @@ TrueMortgage is built exclusively for **mortgages**. It cuts out unnecessary deb
   - See exact interest saved and real calendar time shaved off your mortgage.
 - **Complete Housing Cost View**:
   - Optional property taxes, home insurance, and condo/HOA/strata fees for accurate monthly budgeting.
-- **Visual Schedule & Export**:
-  - Lightweight SVG balance paydown curve.
-  - Principal vs. interest lifetime allocation bar.
-  - Full yearly amortization schedule with CSV export.
+- **Interactive Multi-Graph Carousel (8 High-DPI Views)**:
+  - **Balance Over Time**: Plan vs. baseline comparison curve with interactive scrubbing.
+  - **Money Kept**: Cumulative interest race showing the widening green savings gap.
+  - **Tipping Point**: Monthly interest vs. principal crossover date when more of each payment goes to you than the bank.
+  - **Extra Payment Sensitivity**: Interactive curve showing interest and years saved; click any point to set your payment.
+  - **Strategy Leaderboard**: Side-by-side comparison of accelerated bi-weekly, +10%/+25%/Double-Up, extra monthly, and lump sum, with 1-click apply.
+  - **Cost of Waiting**: Real dollar cost of delaying prepayments by 1, 2, 3, or 5 years.
+  - **Lifetime Breakdown & Cash Flow**: Stacked total cost and calendar year allocation.
+  - Interactive scrubbing, touch swipe, zoom enlargement, and live plain-English takeaway captions on every slide.
+- **Full Schedule & CSV Export**:
+  - Yearly milestone view (5-Yr Renewal, Tipping Point, 50% Equity, Debt-Free).
+  - Detailed payment-by-payment monthly breakdown with one-click CSV export.
 
 ---
 

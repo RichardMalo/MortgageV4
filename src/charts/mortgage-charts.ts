@@ -1,178 +1,114 @@
 /**
- * TrueMortgage — Interactive Multi-Graph Carousel
+ * TrueMortgage â€” Interactive Multi-Graph Carousel
  *
- * Implements 3 synchronized, hardware-accelerated, high-DPI micro-charts:
- *  1. Balance Over Time (Balance curve + baseline strategy comparison + interactive scrubbing)
- *  2. Lifetime Breakdown (Stacked bar: Interest, Principal, Extra on Total Cost)
- *  3. Annual Cash Flow (Stacked bars per calendar year: Interest, Principal, Extra)
+ * Slides are declared in index.html (`.chart-slide[data-chart]`) and resolved through a
+ * small registry, so adding a chart means adding one slide + one definition:
+ *
+ *  Progress
+ *   - balance     Balance over time (plan vs baseline, interactive scrubbing)
+ *   - kept        Money Kept race (cumulative interest gap)            â†’ insight-charts.ts
+ *   - tipping     Interest vs principal tipping point                  â†’ insight-charts.ts
+ *  Decide
+ *   - extra       Extra-payment sensitivity curve (click to apply)     â†’ insight-charts.ts
+ *   - strategies  Strategy leaderboard (click to apply)                â†’ insight-charts.ts
+ *   - waiting     Cost of waiting                                      â†’ insight-charts.ts
+ *  Breakdown
+ *   - lifetime    Lifetime breakdown (stacked bar: Interest, Principal, Extra)
+ *   - cashflow    Annual cash flow (stacked bars per calendar year)
  *
  * Supports:
  *  - Effortless side-to-side touch swiping on mobile (in-place scroll snap)
  *  - Elegant tab switching and next/prev toggling on PC/Mac
  *  - Enlarge/Shrink full-view button (+)
- *  - Rich interactive tooltips and hover highlights
+ *  - Rich interactive tooltips, hover highlights and a one-line takeaway caption per chart
  */
 
-import { Analysis, Country, PaymentRow, YearRow } from '../core/types.js';
-import { formatMoney } from '../core/format.js';
+import { Analysis, MortgageInputs } from '../core/types.js';
+import { formatDuration, formatMoney, formatMonthYear } from '../core/format.js';
 import { REGIONS } from '../core/regions.js';
+import {
+  ChartPadding,
+  formatCompactMoney,
+  getNiceTicks,
+  getThemeColors,
+  initHiDpiCanvas
+} from './chart-utils.js';
+import { ApplyAction, INSIGHT_CHARTS, InsightChart, InsightData, computeInsights } from './insight-charts.js';
 
-export interface ChartThemeColors {
-  isDark: boolean;
-  textColor: string;
-  mutedColor: string;
-  gridColor: string;
-  cardBg: string;
-  accentColor: string;
-  accentSoft: string;
-  extraColor: string;
-  extraHover: string;
-  principalColor: string;
-  principalHover: string;
-  interestColor: string;
-  interestHover: string;
-  baselineColor: string;
+// Re-exported for backwards compatibility (tests and other modules import them from here).
+export {
+  formatCompactMoney,
+  getNiceTicks,
+  getThemeColors,
+  initHiDpiCanvas
+} from './chart-utils.js';
+export type { ChartThemeColors } from './chart-utils.js';
+
+type BuiltInChartId = 'balance' | 'lifetime' | 'cashflow';
+
+interface SlideDef {
+  id: string;
+  title: string;
+  /** Present for registry-driven insight charts; built-in charts use dedicated methods. */
+  insight?: InsightChart;
+  canvas: HTMLCanvasElement;
 }
 
-export const getThemeColors = (): ChartThemeColors => {
-  let isDark = false;
-  if (typeof window !== 'undefined') {
-    const attr = document.documentElement.getAttribute('data-theme');
-    if (attr === 'dark') {
-      isDark = true;
-    } else if (attr === 'light') {
-      isDark = false;
-    } else {
-      isDark =
-        window.matchMedia('(prefers-color-scheme: dark)').matches ||
-        document.documentElement.classList.contains('dark');
-    }
-  }
-
-  return {
-    isDark,
-    textColor: isDark ? '#f1f5f9' : '#0f172a',
-    mutedColor: isDark ? '#94a3b8' : '#64748b',
-    gridColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)',
-    cardBg: isDark ? '#11141c' : '#ffffff',
-    accentColor: isDark ? '#60a5fa' : '#2563eb',
-    accentSoft: isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(37, 99, 235, 0.1)',
-    extraColor: isDark ? '#34d399' : '#059669',
-    extraHover: isDark ? '#6ee7b7' : '#10b981',
-    principalColor: isDark ? '#60a5fa' : '#2563eb',
-    principalHover: isDark ? '#93c5fd' : '#3b82f6',
-    interestColor: isDark ? '#fb7185' : '#e11d48',
-    interestHover: isDark ? '#fda4af' : '#be123c',
-    baselineColor: isDark ? '#94a3b8' : '#64748b'
-  };
-};
-
-/**
- * Calculates human-friendly round tick intervals (e.g. 20k, 50k, 100k, 200k).
- */
-export const getNiceTicks = (maxValue: number, maxTicks = 5): number[] => {
-  if (maxValue <= 0) return [0];
-  const roughStep = maxValue / (maxTicks - 1);
-  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
-  const normalized = roughStep / magnitude;
-
-  let step: number;
-  if (normalized < 1.5) step = 1 * magnitude;
-  else if (normalized < 3) step = 2 * magnitude;
-  else if (normalized < 7) step = 5 * magnitude;
-  else step = 10 * magnitude;
-
-  const ticks: number[] = [];
-  for (let val = 0; val <= maxValue + step * 0.05; val += step) {
-    ticks.push(Math.round(val));
-  }
-  if (ticks.length > 0 && ticks[ticks.length - 1]! < maxValue) {
-    ticks.push(ticks[ticks.length - 1]! + step);
-  }
-  return ticks;
-};
-
-/**
- * Formats compact numbers for axis labels (e.g. $20k, $40k, $600k, $1.2M).
- */
-export const formatCompactMoney = (val: number, country: Country = 'CA'): string => {
-  const r = REGIONS[country] || REGIONS.CA;
-  const sym = r.currency === 'GBP' ? '£' : '$';
-  if (val === 0) return `${sym}0`;
-  if (val >= 1_000_000) {
-    const m = val / 1_000_000;
-    return `${sym}${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
-  }
-  if (val >= 1_000) {
-    const k = val / 1_000;
-    return `${sym}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
-  }
-  return `${sym}${Math.round(val)}`;
-};
-
-/**
- * Initializes a canvas for HiDPI/Retina screens.
- */
-export const initHiDpiCanvas = (
-  canvas: HTMLCanvasElement,
-  width: number,
-  height: number
-): CanvasRenderingContext2D | null => {
-  const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 2 : 2;
-  canvas.width = Math.max(1, Math.round(width * dpr));
-  canvas.height = Math.max(1, Math.round(height * dpr));
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
-
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.scale(dpr, dpr);
-  }
-  return ctx;
-};
+export interface ChartsManagerOptions {
+  /** Called when the user clicks a chart point that maps to a plan change. */
+  onApply?: (action: ApplyAction) => void;
+}
 
 export class MortgageChartsManager {
   private card: HTMLElement;
   private viewport: HTMLElement;
   private titleEl: HTMLElement;
+  private captionEl: HTMLElement | null;
   private expandBtn: HTMLButtonElement;
+  private tabsEl: HTMLElement | null;
   private tabs: HTMLButtonElement[] = [];
   private dots: HTMLButtonElement[] = [];
   private prevBtn: HTMLButtonElement | null = null;
   private nextBtn: HTMLButtonElement | null = null;
 
-  // Canvases
+  // Canvases (built-in charts)
   private canvasBalance: HTMLCanvasElement;
   private canvasLifetime: HTMLCanvasElement;
   private canvasCashFlow: HTMLCanvasElement;
+
+  // Slide registry, in DOM order
+  private slides: SlideDef[] = [];
 
   // Floating Tooltip
   private tooltipEl: HTMLElement;
 
   // State
-  private activeIndex: 0 | 1 | 2 = 0;
+  private activeIndex = 0;
   private isExpanded = false;
   private currentAnalysis: Analysis | null = null;
+  private insightData: InsightData | null = null;
   private hasLoan = false;
   private resizeObserver: ResizeObserver | null = null;
   private isProgrammaticScrolling = false;
   private scrollDebounceTimer: ReturnType<typeof setTimeout> | undefined;
-
-  // Chart titles corresponding to tabs
-  private readonly titles = ['Balance over time', 'Lifetime Breakdown', 'Annual Cash Flow'];
+  private readonly options: ChartsManagerOptions;
 
   // Hover states
   private hoverBalancePeriod: number | null = null;
   private hoverLifetimeSegment: 'interest' | 'principal' | 'extra' | null = null;
   private hoverCashFlowYearIdx: number | null = null;
+  private insightHover: Record<string, number | null> = {};
 
-  constructor() {
+  constructor(options: ChartsManagerOptions = {}) {
+    this.options = options;
     this.card = document.getElementById('chart-card') as HTMLElement;
     this.viewport = document.getElementById('chart-carousel-viewport') as HTMLElement;
     this.titleEl = document.getElementById('chart-active-title') as HTMLElement;
+    this.captionEl = document.getElementById('chart-caption');
     this.expandBtn = document.getElementById('chart-expand-btn') as HTMLButtonElement;
     this.prevBtn = document.getElementById('chart-prev-btn') as HTMLButtonElement | null;
     this.nextBtn = document.getElementById('chart-next-btn') as HTMLButtonElement | null;
+    this.tabsEl = this.card.querySelector<HTMLElement>('.chart-tabs');
 
     this.tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.chart-tab-btn'));
     this.dots = Array.from(document.querySelectorAll<HTMLButtonElement>('.chart-dot'));
@@ -182,6 +118,25 @@ export class MortgageChartsManager {
     this.canvasLifetime = this.setupCanvas('chart-lifetime');
     this.canvasCashFlow = this.setupCanvas('chart-cashflow');
 
+    // Build the slide registry from the DOM (order = carousel order)
+    const builtIn: Record<BuiltInChartId, HTMLCanvasElement> = {
+      balance: this.canvasBalance,
+      lifetime: this.canvasLifetime,
+      cashflow: this.canvasCashFlow
+    };
+    this.slides = Array.from(this.viewport.querySelectorAll<HTMLElement>('.chart-slide')).map((el) => {
+      const id = el.dataset.chart || '';
+      const title = el.dataset.title || 'Mortgage chart';
+      const insight = INSIGHT_CHARTS[id];
+      if (insight) {
+        this.insightHover[id] = null;
+        return { id, title, insight, canvas: this.setupCanvas(`chart-${id}`) };
+      }
+      const canvas = builtIn[id as BuiltInChartId];
+      if (!canvas) throw new Error(`Unknown chart slide "${id}".`);
+      return { id, title, canvas };
+    });
+
     // Create floating tooltip element
     this.tooltipEl = document.createElement('div');
     this.tooltipEl.className = 'chart-floating-tooltip';
@@ -190,6 +145,10 @@ export class MortgageChartsManager {
     this.card.appendChild(this.tooltipEl);
 
     this.bindEvents();
+  }
+
+  private get slideCount(): number {
+    return Math.max(1, this.slides.length);
   }
 
   private setupCanvas(containerId: string): HTMLCanvasElement {
@@ -210,31 +169,181 @@ export class MortgageChartsManager {
   public render(analysis: Analysis, hasLoan: boolean) {
     this.currentAnalysis = analysis;
     this.hasLoan = hasLoan;
+    this.insightData = hasLoan ? computeInsights(analysis) : null;
 
-    // Toggle baseline legend visibility on slide 0
+    // Toggle baseline legend visibility on the balance slide
     const baselineLegend = document.getElementById('legend-baseline');
     if (baselineLegend) {
       baselineLegend.hidden = !analysis.hasStrategy;
     }
+    const keptLegend = document.getElementById('legend-kept-baseline');
+    if (keptLegend) keptLegend.hidden = !analysis.hasStrategy;
+    const tippingLegend = document.getElementById('legend-tipping-baseline');
+    if (tippingLegend) tippingLegend.hidden = !analysis.hasStrategy;
 
     this.drawAll();
+    this.updateCaption();
   }
 
   public drawAll() {
     this.drawBalanceChart();
     this.drawLifetimeChart();
     this.drawCashFlowChart();
+    this.slides.forEach((s) => s.insight && this.drawInsight(s));
   }
 
-  private getDimensions(canvas: HTMLCanvasElement, defaultHeight = 250) {
+  private getDimensions(
+    canvas: HTMLCanvasElement,
+    defaultHeight = 250,
+    padding: ChartPadding = { top: 20, right: 20, bottom: 38, left: 62 },
+    expandedHeight = 420
+  ) {
     const rect = canvas.parentElement?.getBoundingClientRect();
     const width = Math.max(260, rect?.width || this.viewport.clientWidth || 320);
-    const height = this.isExpanded ? 420 : defaultHeight;
-    const padding = { top: 20, right: 20, bottom: 38, left: 62 };
+    const height = this.isExpanded ? expandedHeight : defaultHeight;
     const plotWidth = Math.max(10, width - padding.left - padding.right);
     const plotHeight = Math.max(10, height - padding.top - padding.bottom);
 
     return { width, height, padding, plotWidth, plotHeight };
+  }
+
+  // =========================================================================
+  // Registry-driven insight charts (see insight-charts.ts)
+  // =========================================================================
+  private insightDims(slide: SlideDef) {
+    const chart = slide.insight!;
+    return this.getDimensions(slide.canvas, chart.height, chart.padding, chart.expandedHeight);
+  }
+
+  private drawInsight(slide: SlideDef) {
+    const chart = slide.insight!;
+    const dims = this.insightDims(slide);
+    const ctx = initHiDpiCanvas(slide.canvas, dims.width, dims.height);
+    if (!ctx) return;
+    ctx.clearRect(0, 0, dims.width, dims.height);
+
+    const container = slide.canvas.parentElement;
+    if (!this.hasLoan || !this.currentAnalysis || !this.insightData) {
+      container?.classList.remove('clickable');
+      this.drawEmptyState(ctx, dims, 'Enter a loan to see this chart.');
+      return;
+    }
+    container?.classList.toggle('clickable', chart.isClickable(this.currentAnalysis, this.insightData));
+    chart.draw({
+      ctx,
+      dims,
+      a: this.currentAnalysis,
+      d: this.insightData,
+      colors: getThemeColors(),
+      hover: this.insightHover[chart.id] ?? null
+    });
+  }
+
+  private bindInsightInteractivity(slide: SlideDef) {
+    const chart = slide.insight!;
+    const canvas = slide.canvas;
+    const locate = (clientX: number, clientY: number) => {
+      if (!this.hasLoan || !this.currentAnalysis || !this.insightData) return null;
+      const rect = canvas.getBoundingClientRect();
+      return chart.hit(clientX - rect.left, clientY - rect.top, this.insightDims(slide), this.currentAnalysis, this.insightData);
+    };
+
+    const handleMove = (clientX: number, clientY: number) => {
+      if (this.slides[this.activeIndex] !== slide) return;
+      const idx = locate(clientX, clientY);
+      if (idx === this.insightHover[chart.id] && idx !== null) {
+        this.showTooltip(clientX, clientY, this.tooltipEl.innerHTML);
+        return;
+      }
+      this.insightHover[chart.id] = idx;
+      this.drawInsight(slide);
+      if (idx === null) {
+        this.tooltipEl.hidden = true;
+        return;
+      }
+      this.showTooltip(clientX, clientY, chart.tooltip(idx, this.currentAnalysis!, this.insightData!));
+    };
+
+    const clear = () => {
+      this.insightHover[chart.id] = null;
+      this.tooltipEl.hidden = true;
+      this.drawInsight(slide);
+    };
+
+    canvas.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseleave', clear);
+    canvas.addEventListener(
+      'touchmove',
+      (e) => {
+        if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      },
+      { passive: true }
+    );
+    canvas.addEventListener('touchend', () => setTimeout(clear, 1500));
+
+    canvas.addEventListener('click', (e) => {
+      if (!chart.apply || !this.currentAnalysis || !this.insightData) return;
+      if (!chart.isClickable(this.currentAnalysis, this.insightData)) return;
+      const idx = locate(e.clientX, e.clientY);
+      if (idx === null) return;
+      const action = chart.apply(idx, this.currentAnalysis, this.insightData);
+      if (action) {
+        this.hideTooltip();
+        this.options.onApply?.(action);
+      }
+    });
+  }
+
+  // =========================================================================
+  // Captions — one takeaway sentence under the active chart
+  // =========================================================================
+  private updateCaption() {
+    if (!this.captionEl) return;
+    const slide = this.slides[this.activeIndex];
+    const a = this.currentAnalysis;
+    if (!slide || !a || !this.hasLoan) {
+      this.captionEl.innerHTML = '';
+      this.captionEl.hidden = true;
+      return;
+    }
+    let html = '';
+    if (slide.insight && this.insightData) {
+      html = slide.insight.caption(a, this.insightData);
+    } else {
+      html = this.builtInCaption(slide.id as BuiltInChartId, a);
+    }
+    this.captionEl.innerHTML = html;
+    this.captionEl.hidden = !html;
+  }
+
+  private builtInCaption(id: BuiltInChartId, a: Analysis): string {
+    const c = a.inputs.country;
+    const strong = (s: string) => `<strong>${s}</strong>`;
+    if (id === 'balance') {
+      const when = formatMonthYear(a.plan.payoffDate, c);
+      if (a.hasStrategy && a.monthsSaved > 0) {
+        return `You'll be mortgage-free in ${strong(when)} — ${strong(
+          formatDuration(a.monthsSaved)
+        )} sooner than paying monthly with no extras.`;
+      }
+      return `On this plan you'll be mortgage-free in ${strong(when)}. Open the ${strong('Decide')} charts to find a faster path.`;
+    }
+    if (id === 'lifetime') {
+      const perDollar = a.loanAmount > 0 ? (a.loanAmount + a.plan.totalInterest) / a.loanAmount : 0;
+      return `For every ${formatMoney(1, c)} you borrow, you'll repay ${strong(formatMoney(perDollar, c, true))} in total.${
+        a.interestSaved >= 1 ? ` Your extras already cut ${strong(formatMoney(a.interestSaved, c))} of interest.` : ''
+      }`;
+    }
+    const first = a.years[0];
+    if (!first) return '';
+    const share = (y: { interest: number; principal: number; extra: number }) =>
+      Math.round((y.interest / Math.max(1, y.interest + y.principal + y.extra)) * 100);
+    const later = a.years[Math.min(a.years.length - 1, 9)];
+    return later && later !== first
+      ? `In year 1, ${strong(`${share(first)}%`)} of what you pay goes to interest; by year ${later.year} it's ${strong(
+          `${share(later)}%`
+        )}.`
+      : `In year 1, ${strong(`${share(first)}%`)} of what you pay goes to interest.`;
   }
 
   // =========================================================================
@@ -672,13 +781,15 @@ export class MortgageChartsManager {
   // Carousel Navigation & Touch Swipe Handling
   // =========================================================================
   public setActiveIndex(index: number, scrollViewport = true) {
-    const bounded = Math.max(0, Math.min(2, index)) as 0 | 1 | 2;
+    const bounded = Math.max(0, Math.min(this.slideCount - 1, index));
     if (this.activeIndex === bounded && !scrollViewport) return;
     this.activeIndex = bounded;
 
+    const currentSlide = this.slides[this.activeIndex];
+
     // Update Title
-    if (this.titleEl) {
-      this.titleEl.textContent = this.titles[this.activeIndex] || 'Mortgage Chart';
+    if (this.titleEl && currentSlide) {
+      this.titleEl.textContent = currentSlide.title || 'Mortgage Chart';
     }
 
     // Update Tabs
@@ -699,6 +810,7 @@ export class MortgageChartsManager {
 
     // Hide tooltip when changing slide
     this.hideTooltip();
+    this.updateCaption();
 
     // Scroll viewport smoothly if requested
     if (scrollViewport && this.viewport) {
@@ -712,9 +824,11 @@ export class MortgageChartsManager {
 
     // Redraw active slide for pixel perfection
     requestAnimationFrame(() => {
-      if (this.activeIndex === 0) this.drawBalanceChart();
-      else if (this.activeIndex === 1) this.drawLifetimeChart();
-      else this.drawCashFlowChart();
+      if (!currentSlide) return;
+      if (currentSlide.id === 'balance') this.drawBalanceChart();
+      else if (currentSlide.id === 'lifetime') this.drawLifetimeChart();
+      else if (currentSlide.id === 'cashflow') this.drawCashFlowChart();
+      else if (currentSlide.insight) this.drawInsight(currentSlide);
     });
   }
 
@@ -723,7 +837,7 @@ export class MortgageChartsManager {
     this.card.classList.toggle('expanded', this.isExpanded);
 
     if (this.expandBtn) {
-      this.expandBtn.innerHTML = this.isExpanded ? '−' : '+';
+      this.expandBtn.innerHTML = this.isExpanded ? '&minus;' : '+';
       this.expandBtn.title = this.isExpanded ? 'Shrink chart' : 'Enlarge chart';
       this.expandBtn.setAttribute(
         'aria-label',
@@ -776,6 +890,7 @@ export class MortgageChartsManager {
     this.hoverBalancePeriod = null;
     this.hoverLifetimeSegment = null;
     this.hoverCashFlowYearIdx = null;
+    Object.keys(this.insightHover).forEach((k) => (this.insightHover[k] = null));
   }
 
   // =========================================================================
@@ -800,12 +915,12 @@ export class MortgageChartsManager {
 
     // 3. Prev / Next buttons
     this.prevBtn?.addEventListener('click', () => {
-      const prev = this.activeIndex === 0 ? 2 : this.activeIndex - 1;
+      const prev = this.activeIndex === 0 ? this.slideCount - 1 : this.activeIndex - 1;
       this.setActiveIndex(prev, true);
     });
 
     this.nextBtn?.addEventListener('click', () => {
-      const next = this.activeIndex === 2 ? 0 : this.activeIndex + 1;
+      const next = this.activeIndex === this.slideCount - 1 ? 0 : this.activeIndex + 1;
       this.setActiveIndex(next, true);
     });
 
@@ -860,7 +975,7 @@ export class MortgageChartsManager {
 
         // If swipe was swift and predominantly horizontal
         if (Math.abs(deltaX) > 45 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5 && elapsed < 400) {
-          if (deltaX < 0 && this.activeIndex < 2) {
+          if (deltaX < 0 && this.activeIndex < this.slideCount - 1) {
             this.setActiveIndex(this.activeIndex + 1, true);
           } else if (deltaX > 0 && this.activeIndex > 0) {
             this.setActiveIndex(this.activeIndex - 1, true);
@@ -875,7 +990,7 @@ export class MortgageChartsManager {
       if (e.key === 'ArrowLeft' && this.activeIndex > 0) {
         e.preventDefault();
         this.setActiveIndex(this.activeIndex - 1, true);
-      } else if (e.key === 'ArrowRight' && this.activeIndex < 2) {
+      } else if (e.key === 'ArrowRight' && this.activeIndex < this.slideCount - 1) {
         e.preventDefault();
         this.setActiveIndex(this.activeIndex + 1, true);
       }
@@ -885,6 +1000,7 @@ export class MortgageChartsManager {
     this.bindBalanceInteractivity();
     this.bindLifetimeInteractivity();
     this.bindCashFlowInteractivity();
+    this.slides.forEach((s) => s.insight && this.bindInsightInteractivity(s));
 
     // 9. ResizeObserver
     this.resizeObserver = new ResizeObserver(() => {
@@ -906,11 +1022,11 @@ export class MortgageChartsManager {
   }
 
   // =========================================================================
-  // Canvas 0: Balance Over Time Interactivity
+  // Canvas: Balance Over Time Interactivity
   // =========================================================================
   private bindBalanceInteractivity() {
     const handleMove = (clientX: number, clientY: number) => {
-      if (!this.hasLoan || !this.currentAnalysis || this.activeIndex !== 0) return;
+      if (!this.hasLoan || !this.currentAnalysis || this.slides[this.activeIndex]?.id !== 'balance') return;
       const a = this.currentAnalysis;
       const rect = this.canvasBalance.getBoundingClientRect();
       const x = clientX - rect.left;
@@ -962,7 +1078,7 @@ export class MortgageChartsManager {
         }
 
         const html = `
-          <div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
+          <div class="tip-header">${dateStr} Â· Year ${yr} <span class="tip-sub">#${row.n}</span></div>
           <div class="tip-row plan">
             <span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong>
           </div>
@@ -1003,7 +1119,7 @@ export class MortgageChartsManager {
   // =========================================================================
   private bindLifetimeInteractivity() {
     const handleMove = (clientX: number, clientY: number) => {
-      if (!this.hasLoan || !this.currentAnalysis || this.activeIndex !== 1) return;
+      if (!this.hasLoan || !this.currentAnalysis || this.slides[this.activeIndex]?.id !== 'lifetime') return;
       const a = this.currentAnalysis;
       const rect = this.canvasLifetime.getBoundingClientRect();
       const x = clientX - rect.left;
@@ -1134,7 +1250,7 @@ export class MortgageChartsManager {
         !this.hasLoan ||
         !this.currentAnalysis ||
         aHasNoYears(this.currentAnalysis) ||
-        this.activeIndex !== 2
+        this.slides[this.activeIndex]?.id !== 'cashflow'
       )
         return;
       const a = this.currentAnalysis;
@@ -1162,7 +1278,7 @@ export class MortgageChartsManager {
       const totalPaid = yr.interest + yr.principal + yr.extra;
 
       const html = `
-        <div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
+        <div class="tip-header">${yr.endDate.getFullYear()} Â· Year ${yr.year}</div>
         ${yr.extra > 0 ? `<div class="tip-row extra"><span><i class="swatch extra"></i>Extra:</span> <strong>${formatMoney(yr.extra, c)}</strong></div>` : ''}
         <div class="tip-row principal"><span><i class="swatch chart-principal"></i>Principal:</span> <strong>${formatMoney(yr.principal, c)}</strong></div>
         <div class="tip-row interest"><span><i class="swatch chart-interest"></i>Interest:</span> <strong>${formatMoney(yr.interest, c)}</strong></div>
