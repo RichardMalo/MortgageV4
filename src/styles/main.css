@@ -201,6 +201,10 @@ html[data-theme='light'] {
   display: none !important;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 html,
 body {
   margin: 0;
@@ -210,6 +214,8 @@ body {
   font-size: 15px;
   line-height: 1.5;
   transition: background-color 0.25s ease, color 0.25s ease;
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
 }
 
 /* =========================================================================
@@ -435,6 +441,13 @@ html[data-theme='dark'] .icon-moon {
 .row-2 {
   display: flex;
   gap: 12px;
+}
+
+@media (max-width: 520px) {
+  .row-2:not(:has(.pct)) {
+    flex-direction: column;
+    gap: 12px;
+  }
 }
 
 .grow {
@@ -1298,7 +1311,8 @@ input[type='number']::-webkit-outer-spin-button {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   display: flex;
-  touch-action: pan-y;
+  touch-action: manipulation;
+  overscroll-behavior-x: contain;
   outline: none;
 }
 
@@ -1380,6 +1394,7 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .chart-dot {
+  position: relative;
   width: 7px;
   height: 7px;
   border-radius: 50%;
@@ -1388,7 +1403,16 @@ input[type='number']::-webkit-outer-spin-button {
   opacity: 0.35;
   cursor: pointer;
   padding: 0;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chart-dot::after {
+  content: '';
+  position: absolute;
+  top: -8px;
+  bottom: -8px;
+  left: -6px;
+  right: -6px;
 }
 
 .chart-dot:hover {
@@ -1398,7 +1422,9 @@ input[type='number']::-webkit-outer-spin-button {
 .chart-dot.active {
   background: var(--primary);
   opacity: 1;
-  transform: scale(1.35);
+  width: 18px;
+  border-radius: var(--radius-pill);
+  transform: none;
 }
 
 /* Floating High-Jewelry Tooltip */
@@ -1417,6 +1443,8 @@ input[type='number']::-webkit-outer-spin-button {
   transform: translateX(-50%);
   transition: opacity 0.12s ease;
   white-space: nowrap;
+  max-width: calc(100% - 24px);
+  box-sizing: border-box;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
@@ -1652,6 +1680,8 @@ input[type='number']::-webkit-outer-spin-button {
   justify-content: space-between;
   width: 100%;
   gap: 12px;
+  flex-wrap: wrap;
+  row-gap: 8px;
 }
 
 .schedule-summary-title {
@@ -1771,8 +1801,9 @@ input[type='number']::-webkit-outer-spin-button {
 
 .milestones-showcase {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 10px;
+  overscroll-behavior-x: contain;
 }
 
 /* Milestone Card Atelier Styling */
@@ -1947,6 +1978,7 @@ input[type='number']::-webkit-outer-spin-button {
   max-height: 440px;
   overflow-y: auto;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   -webkit-overflow-scrolling: touch;
@@ -2233,17 +2265,18 @@ select:focus-visible {
 
 @media (max-width: 640px) {
   .app-header {
-    padding: 12px 10px 4px;
+    padding: 14px 12px 6px;
   }
   .layout {
-    padding: 6px 4px 28px;
-    gap: 12px;
+    padding: 8px 12px 32px;
+    gap: 14px;
   }
   .card {
-    padding: 14px 10px;
+    padding: 18px 14px;
+    border-radius: var(--radius-md);
   }
   .hero {
-    padding: 16px 14px;
+    padding: 18px 16px;
   }
   .schedule-actions {
     flex-direction: column;
@@ -2275,11 +2308,10 @@ select:focus-visible {
     display: flex;
     overflow-x: auto;
     scroll-snap-type: x mandatory;
+    overscroll-behavior-x: contain;
     gap: 10px;
-    padding: 2px 2px 10px;
-    margin: 0 -4px;
-    padding-left: 4px;
-    padding-right: 4px;
+    padding: 2px 2px 8px;
+    margin: 0;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: thin;
   }
@@ -2419,16 +2451,73 @@ select:focus-visible {
   }
 }
 
+@media (max-width: 480px) {
+  .btn-header .btn-text {
+    display: none;
+  }
+  .btn-header#btn-share {
+    padding: 6px 8px;
+    width: 34px;
+    justify-content: center;
+  }
+  .header-actions {
+    gap: 4px;
+  }
+  .btn-link {
+    padding: 6px 4px;
+    font-size: 0.8rem;
+  }
+}
+
+@media (max-width: 360px) {
+  .brand-name {
+    font-size: 0.85rem;
+    letter-spacing: 0.06em;
+  }
+  .brand-tag {
+    font-size: 0.58rem;
+  }
+  .brand {
+    gap: 8px;
+  }
+  .brand-emblem {
+    width: 30px;
+    height: 30px;
+  }
+}
+
 /* =========================================================================
    Print Statement Mode (@media print)
+   Haute-Horlogerie Client Presentation Output
    ========================================================================= */
 
 @media print {
+  :root,
+  html,
   body {
+    --bg: #ffffff !important;
+    --card: #ffffff !important;
+    --card-subtle: #fafafa !important;
+    --card-elevated: #ffffff !important;
+    --text: #0a0a0a !important;
+    --text-secondary: #262626 !important;
+    --muted: #525252 !important;
+    --muted-light: #737373 !important;
+    --border: #d4d4d4 !important;
+    --border-hover: #a3a3a3 !important;
+    --border-subtle: #e5e5e5 !important;
+    --input: #f5f5f5 !important;
+    --input-focus: #ffffff !important;
+    --primary: #1d4ed8 !important;
+    --principal: #1d4ed8 !important;
+    --interest: #be123c !important;
+    --good: #047857 !important;
+    --warn: #b45309 !important;
     background: #ffffff !important;
     color: #000000 !important;
-    font-size: 12pt;
+    font-size: 11pt;
   }
+
   .app-header,
   .inputs,
   .header-actions,
@@ -2440,39 +2529,94 @@ select:focus-visible {
   .btn-link,
   .toast,
   .hero-toggle,
-  .hero-increase-bar {
+  .hero-increase-bar,
+  .milestones-scroll-hint,
+  .milestone-card-foot {
     display: none !important;
   }
+
   .layout {
     display: block !important;
     max-width: 100% !important;
     padding: 0 !important;
   }
+
   .card {
     box-shadow: none !important;
     border: 1px solid #cccccc !important;
     break-inside: avoid;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
     padding: 16px !important;
+    background: #ffffff !important;
   }
+
   .hero {
     background: #ffffff !important;
     color: #000000 !important;
     border: 2px solid #000000 !important;
     box-shadow: none !important;
   }
+
   .hero-amount,
-  .hero-label {
+  .hero-label,
+  .hero-sub {
     color: #000000 !important;
   }
+
+  .milestones-showcase {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .milestone-card {
+    flex: none !important;
+    min-width: 0 !important;
+    padding: 8px 10px !important;
+    box-shadow: none !important;
+  }
+
+  details.schedule {
+    display: block !important;
+  }
+
+  details.schedule > * {
+    display: block !important;
+  }
+
+  .schedule-summary {
+    pointer-events: none;
+    margin-bottom: 12px !important;
+  }
+
+  .schedule-summary-title::before {
+    display: none !important;
+  }
+
   .table-wrap {
     max-height: none !important;
     overflow: visible !important;
+    border: 1px solid #cccccc !important;
   }
+
   table {
     font-size: 9pt;
   }
-  th, td {
+
+  thead th {
+    background: #f0f0f0 !important;
+    color: #000000 !important;
+    border-bottom: 2px solid #000000 !important;
+  }
+
+  tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  th,
+  td {
     padding: 4px 6px;
   }
 }

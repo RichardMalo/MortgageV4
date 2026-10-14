@@ -1,17 +1,17 @@
 /**
- * TrueMortgage â€” Interactive Multi-Graph Carousel
+ * TrueMortgage — Interactive Multi-Graph Carousel
  *
  * Slides are declared in index.html (`.chart-slide[data-chart]`) and resolved through a
  * small registry, so adding a chart means adding one slide + one definition:
  *
  *  Progress
  *   - balance     Balance over time (plan vs baseline, interactive scrubbing)
- *   - kept        Money Kept race (cumulative interest gap)            â†’ insight-charts.ts
- *   - tipping     Interest vs principal tipping point                  â†’ insight-charts.ts
+ *   - kept        Money Kept race (cumulative interest gap)            → insight-charts.ts
+ *   - tipping     Interest vs principal tipping point                  → insight-charts.ts
  *  Decide
- *   - extra       Extra-payment sensitivity curve (click to apply)     â†’ insight-charts.ts
- *   - strategies  Strategy leaderboard (click to apply)                â†’ insight-charts.ts
- *   - waiting     Cost of waiting                                      â†’ insight-charts.ts
+ *   - extra       Extra-payment sensitivity curve (click to apply)     → insight-charts.ts
+ *   - strategies  Strategy leaderboard (click to apply)                → insight-charts.ts
+ *   - waiting     Cost of waiting                                      → insight-charts.ts
  *  Breakdown
  *   - lifetime    Lifetime breakdown (stacked bar: Interest, Principal, Extra)
  *   - cashflow    Annual cash flow (stacked bars per calendar year)
@@ -753,6 +753,7 @@ export class MortgageChartsManager {
 
       // X-Axis Year Labels
       const calYear = yr.endDate.getFullYear();
+      const yrText = dims.width < 480 ? `'${String(calYear).slice(-2)}` : String(calYear);
       const step = years.length > 20 ? 5 : years.length > 10 ? 2 : 1;
       if (idx % step === 0 || idx === years.length - 1) {
         ctx.fillStyle = isHovered ? colors.textColor : colors.mutedColor;
@@ -760,7 +761,7 @@ export class MortgageChartsManager {
           ? 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
           : '10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText(String(calYear), centerX, dims.padding.top + dims.plotHeight + 16);
+        ctx.fillText(yrText, centerX, dims.padding.top + dims.plotHeight + 16);
       }
     });
   }
@@ -798,6 +799,9 @@ export class MortgageChartsManager {
       const active = idx === this.activeIndex;
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-selected', String(active));
+      if (active) {
+        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      }
     });
 
     // Update Dots
@@ -1078,7 +1082,7 @@ export class MortgageChartsManager {
         }
 
         const html = `
-          <div class="tip-header">${dateStr} Â· Year ${yr} <span class="tip-sub">#${row.n}</span></div>
+          <div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
           <div class="tip-row plan">
             <span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong>
           </div>
@@ -1278,7 +1282,7 @@ export class MortgageChartsManager {
       const totalPaid = yr.interest + yr.principal + yr.extra;
 
       const html = `
-        <div class="tip-header">${yr.endDate.getFullYear()} Â· Year ${yr.year}</div>
+        <div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
         ${yr.extra > 0 ? `<div class="tip-row extra"><span><i class="swatch extra"></i>Extra:</span> <strong>${formatMoney(yr.extra, c)}</strong></div>` : ''}
         <div class="tip-row principal"><span><i class="swatch chart-principal"></i>Principal:</span> <strong>${formatMoney(yr.principal, c)}</strong></div>
         <div class="tip-row interest"><span><i class="swatch chart-interest"></i>Interest:</span> <strong>${formatMoney(yr.interest, c)}</strong></div>

@@ -505,7 +505,7 @@ export const extraChart: InsightChart = {
     sweep.points.forEach((p, i) => {
       if (i % labelEvery === 0) {
         ctx.fillText(
-          i === 0 ? '$0' : `+${compact(a, p.extraMonthly)}`,
+          i === 0 ? compact(a, 0) : `+${compact(a, p.extraMonthly)}`,
           g.getX(p.extraMonthly),
           dims.padding.top + dims.plotHeight + 20
         );
@@ -706,7 +706,9 @@ export const strategiesChart: InsightChart = {
       ctx.fillStyle = s.isCurrent ? colors.accentColor : colors.extraColor;
       const valueText =
         s.monthsSaved >= 1
-          ? `${wide ? money(a, s.interestSaved) : compact(a, s.interestSaved)} · ${formatDuration(s.monthsSaved)} sooner`
+          ? dims.width < 380
+            ? `${compact(a, s.interestSaved)} · −${formatDuration(s.monthsSaved)}`
+            : `${wide ? money(a, s.interestSaved) : compact(a, s.interestSaved)} · ${formatDuration(s.monthsSaved)} sooner`
           : wide
             ? money(a, s.interestSaved)
             : compact(a, s.interestSaved);
@@ -798,7 +800,8 @@ const waitingGeom = (dims: ChartDims, pts: DelayPoint[]) => {
   };
 };
 
-const delayLabel = (years: number) => (years === 0 ? 'Start now' : `Wait ${years} yr${years === 1 ? '' : 's'}`);
+const delayLabel = (years: number, compact = false) =>
+  years === 0 ? (compact ? 'Now' : 'Start now') : compact ? `+${years}y` : `Wait ${years} yr${years === 1 ? '' : 's'}`;
 
 export const waitingChart: InsightChart = {
   id: 'waiting',
@@ -861,7 +864,7 @@ export const waitingChart: InsightChart = {
       }
       ctx.font = i === 0 ? font(11, 700) : font(11);
       ctx.fillStyle = i === 0 ? colors.textColor : colors.mutedColor;
-      ctx.fillText(delayLabel(p.delayYears), cx, floor + 20);
+      ctx.fillText(delayLabel(p.delayYears, dims.width < 400), cx, floor + 20);
     });
   },
 

@@ -611,8 +611,6 @@ const render = () => {
   // Render the Prada Milestone Horizons Showcase
   renderMilestonesShowcase(milestones);
 
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640;
-
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
         .map((r) => {
@@ -623,7 +621,7 @@ const render = () => {
           const rowClass = matchedMilestone ? `milestone-row row-milestone-${matchedMilestone.key}` : '';
           return `<tr class="${rowClass}" id="schedule-row-month-${r.n}">
             <td class="col-num">${r.n}</td>
-            <td class="col-date">${m} <span class="date-yr-full" style="${isMobile ? 'display:none' : ''}">${y}</span><span class="date-yr-short" style="${isMobile ? '' : 'display:none'}">'${y2}</span></td>
+            <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span></td>
             <td class="col-payment">${money(r.scheduled + r.extra, false)}</td>
             <td class="col-interest">${money(r.interest, false)}</td>
             <td class="col-principal">${money(r.principal, false)}</td>
@@ -662,7 +660,7 @@ const render = () => {
           return `${dividerHtml}<tr class="${rowClass}" id="schedule-row-year-${y.year}">
             <td class="col-year">
               <span class="year-num">${y.year}</span>
-              <span class="year-date muted"><span class="date-yr-full" style="${isMobile ? 'display:none' : ''}">${y.endDate.getFullYear()}</span><span class="date-yr-short" style="${isMobile ? '' : 'display:none'}">'${y2}</span></span>
+              <span class="year-date muted"><span class="date-yr-full">${y.endDate.getFullYear()}</span><span class="date-yr-short">'${y2}</span></span>
               <span class="milestone-badge-desktop">${badges.join('')}</span>
               <span class="milestone-pip-mobile">${pips.join('')}</span>
             </td>
@@ -726,6 +724,7 @@ const sharePlan = () => {
   if (state.propertyTaxYearly > 0) url.searchParams.set('tax', String(state.propertyTaxYearly));
   if (state.homeInsuranceYearly > 0) url.searchParams.set('ins', String(state.homeInsuranceYearly));
   if (state.feesMonthly > 0) url.searchParams.set('fees', String(state.feesMonthly));
+  if (state.pmiRate > 0) url.searchParams.set('pmi', String(state.pmiRate));
 
   // Copy to clipboard
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -770,6 +769,7 @@ const bind = () => {
     const down = Math.round((state.homePrice * (Number.isFinite(pct) ? pct : 0)) / 100);
     update({ downPayment: down });
     setField($<HTMLInputElement>('in-down'), String(down));
+    syncDownPct();
   });
 
   // Down payment preset micro-pills
@@ -953,4 +953,13 @@ window.addEventListener('resize', () => {
     lastIsMobile = isMobile;
     render();
   }
+});
+
+// Crisp vector print redraw
+window.addEventListener('beforeprint', () => {
+  chartsManager?.drawAll();
+});
+
+window.addEventListener('afterprint', () => {
+  chartsManager?.drawAll();
 });

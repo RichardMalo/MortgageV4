@@ -30,18 +30,67 @@ export interface ChartThemeColors {
   warnColor: string;
 }
 
+// Ensure CanvasRenderingContext2D.prototype.roundRect is available across all browsers/devices
+if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (
+    this: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radii?: number | number[]
+  ) {
+    let rTopLeft = 0;
+    let rTopRight = 0;
+    let rBottomRight = 0;
+    let rBottomLeft = 0;
+
+    if (typeof radii === 'number') {
+      rTopLeft = rTopRight = rBottomRight = rBottomLeft = Math.min(radii, w / 2, h / 2);
+    } else if (Array.isArray(radii)) {
+      if (radii.length === 1) {
+        rTopLeft = rTopRight = rBottomRight = rBottomLeft = Math.min(radii[0] || 0, w / 2, h / 2);
+      } else if (radii.length === 2) {
+        rTopLeft = rBottomRight = Math.min(radii[0] || 0, w / 2, h / 2);
+        rTopRight = rBottomLeft = Math.min(radii[1] || 0, w / 2, h / 2);
+      } else if (radii.length === 4) {
+        rTopLeft = Math.min(radii[0] || 0, w / 2, h / 2);
+        rTopRight = Math.min(radii[1] || 0, w / 2, h / 2);
+        rBottomRight = Math.min(radii[2] || 0, w / 2, h / 2);
+        rBottomLeft = Math.min(radii[3] || 0, w / 2, h / 2);
+      }
+    }
+
+    this.moveTo(x + rTopLeft, y);
+    this.lineTo(x + w - rTopRight, y);
+    if (rTopRight > 0) this.arcTo(x + w, y, x + w, y + rTopRight, rTopRight);
+    this.lineTo(x + w, y + h - rBottomRight);
+    if (rBottomRight > 0) this.arcTo(x + w, y + h, x + w - rBottomRight, y + h, rBottomRight);
+    this.lineTo(x + rBottomLeft, y + h);
+    if (rBottomLeft > 0) this.arcTo(x, y + h, x, y + h - rBottomLeft, rBottomLeft);
+    this.lineTo(x, y + rTopLeft);
+    if (rTopLeft > 0) this.arcTo(x, y, x + rTopLeft, y, rTopLeft);
+    return this;
+  };
+}
+
 export const getThemeColors = (): ChartThemeColors => {
   let isDark = false;
   if (typeof window !== 'undefined') {
-    const attr = document.documentElement.getAttribute('data-theme');
-    if (attr === 'dark') {
-      isDark = true;
-    } else if (attr === 'light') {
+    // In print mode, always produce pristine high-contrast light mode output
+    if (window.matchMedia?.('print')?.matches) {
       isDark = false;
     } else {
-      isDark =
-        window.matchMedia('(prefers-color-scheme: dark)').matches ||
-        document.documentElement.classList.contains('dark');
+      const attr = document.documentElement.getAttribute('data-theme');
+      if (attr === 'dark') {
+        isDark = true;
+      } else if (attr === 'light') {
+        isDark = false;
+      } else {
+        isDark =
+          window.matchMedia('(prefers-color-scheme: dark)').matches ||
+          document.documentElement.classList.contains('dark');
+      }
     }
   }
 
@@ -93,21 +142,24 @@ export const getNiceTicks = (maxValue: number, maxTicks = 5): number[] => {
 };
 
 /**
- * Formats compact numbers for axis labels (e.g. $20k, $40k, $600k, $1.2M).
+ * Formats compact numbers for axis labels (e.g. $20k, $40k, $600k, $1.2M, -$50k).
  */
 export const formatCompactMoney = (val: number, country: Country = 'CA'): string => {
   const r = REGIONS[country] || REGIONS.CA;
   const sym = r.currency === 'GBP' ? '£' : '$';
-  if (val === 0) return `${sym}0`;
-  if (val >= 1_000_000) {
-    const m = val / 1_000_000;
-    return `${sym}${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
+  if (!Number.isFinite(val) || val === 0) return `${sym}0`;
+  const sign = val < 0 ? '−' : '';
+  const abs = Math.abs(val);
+
+  if (abs >= 1_000_000) {
+    const m = abs / 1_000_000;
+    return `${sign}${sym}${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
   }
-  if (val >= 1_000) {
-    const k = val / 1_000;
-    return `${sym}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
+  if (abs >= 1_000) {
+    const k = abs / 1_000;
+    return `${sign}${sym}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
   }
-  return `${sym}${Math.round(val)}`;
+  return `${sign}${sym}${Math.round(abs)}`;
 };
 
 /**
