@@ -269,6 +269,7 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
   if (countEl) {
     countEl.textContent = `${milestones.length} Landmarks`;
   }
+  container.style.setProperty('--milestone-cols', String(Math.max(1, milestones.length)));
 
   container.innerHTML = milestones
     .map(
@@ -277,7 +278,7 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
       <div class="milestone-card-top">
         <span class="milestone-tag ${m.pillClass}">
           <span class="milestone-tag-glyph" aria-hidden="true">${m.icon}</span>
-          <span>${escapeHtml(m.title)}</span>
+          <span class="milestone-tag-label">${escapeHtml(m.title)}</span>
         </span>
         <span class="milestone-card-target">Yr ${m.year}</span>
       </div>
@@ -286,7 +287,7 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
         <span class="metric-main">${escapeHtml(m.mainMetric)}</span>
         <span class="metric-sub">${escapeHtml(m.subMetric)}</span>
       </div>
-      <div class="milestone-card-desc">${escapeHtml(m.descText)}</div>
+      <div class="milestone-card-desc" title="${escapeHtml(m.descText)}">${escapeHtml(m.descText)}</div>
       <div class="milestone-card-foot">
         <span class="milestone-card-action">View in schedule</span>
         <span class="milestone-card-arrow" aria-hidden="true">↓</span>
@@ -525,7 +526,7 @@ const render = () => {
           dateStr: formatMonthYear(y5.endDate, c),
           mainMetric: money(y5.endBalance),
           subMetric: 'Remaining balance',
-          descText: `${pctPaid}% of original loan paid down. Standard fixed-term concludes; major checkpoint to renew, refinance, or renegotiate terms.`,
+          descText: `${pctPaid}% of loan paid down · Fixed term concludes; renew or refinance checkpoint.`,
           badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr Term</span>',
           pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>',
           dividerDetail: `5-Yr Term Renewal · Balance: ${money(y5.endBalance)} (${pctPaid}% paid)`
@@ -552,8 +553,8 @@ const render = () => {
         subMetric: `${money(yTip.principal)} vs ${money(yTip.interest)}`,
         descText:
           effectiveTippingYear === 1
-            ? 'From Day 1, your scheduled payments pay off more mortgage principal than bank interest.'
-            : 'The equity inflection point. From this milestone forward, the majority of every dollar you pay builds your home equity rather than bank interest.',
+            ? 'From Day 1, scheduled payments build more equity than bank interest.'
+            : 'Equity inflection point: payments build equity faster than bank interest.',
         badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>',
         pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
         dividerDetail: `Principal overtakes interest · ${money(yTip.principal)} vs ${money(yTip.interest)}`
@@ -577,7 +578,7 @@ const render = () => {
           dateStr: formatMonthYear(yHalf.endDate, c),
           mainMetric: money(yHalf.endBalance),
           subMetric: '50% loan cleared',
-          descText: `Halfway to debt freedom. Balance cut in half to ${money(yHalf.endBalance)}. From here, principal reduction compounds with rapid momentum.`,
+          descText: `Halfway mark · Balance halved to ${money(yHalf.endBalance)} as payoff accelerates.`,
           badgeDesktop: '<span class="milestone-badge milestone-half">50% Equity</span>',
           pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>',
           dividerDetail: `50% Equity Landmark · Balance: ${money(yHalf.endBalance)}`
@@ -600,7 +601,7 @@ const render = () => {
         dateStr: formatMonthYear(plan.payoffDate, c),
         mainMetric: '$0 Balance',
         subMetric: '100% Home equity',
-        descText: `Total freedom. Entire loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}. Total interest paid: ${money(plan.totalInterest)}${savedInfo}.`,
+        descText: `Loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}${savedInfo}. Full debt freedom.`,
         badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
         pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>',
         dividerDetail: '100% Debt-Free · $0 Balance · Fully Owned'
