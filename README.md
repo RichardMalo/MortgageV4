@@ -1,6 +1,6 @@
 # ⌂ TrueMortgage
-> **A Clean, Fast, Mortgage-Only Calculator**  
-> *100% Client-Side | Pure Browser Architecture | Zero Tracking or Cloud Storage*
+> **An Atelier-Grade, Private Mortgage Calculator**  
+> *Minimalist Luxury | High Horology Precision | 100% Client-Side | Zero Tracking or Cloud Storage*
 
 ---
 
@@ -12,34 +12,55 @@
 
 ## 📑 Overview
 
-TrueMortgage is built exclusively for **mortgages**. It cuts out unnecessary debt consolidation tools, credit card sliders, and convoluted multi-pane dashboards in favor of an intuitive, clean interface that provides immediate, actionable answers.
+**TrueMortgage** is built exclusively for **mortgages**. It cuts out debt consolidation clutter, credit card sliders, and convoluted multi-pane dashboards in favor of an architecturally clean, fast, and elegant interface that provides immediate, actionable answers for homebuyers and homeowners alike.
 
-### Core Features
+Designed with a **Prada-grade minimalist luxury aesthetic** and zero external UI/charting dependencies, it delivers instant calculations with microsecond performance and complete client-side privacy.
 
-- **Focused solely on Mortgages**:
-  - Buying a Home (Price & Down Payment)
-  - Existing Mortgage (Current Balance & Remaining Years)
-- **Automatic Regional Calculations**:
-  - **Canada**: Semi-annual compounding and Dec 2024 CMHC insurance rules with tier validations.
-  - **United States**: Monthly compounding and statutory Private Mortgage Insurance (PMI) automatic cancellation at 78% LTV.
-  - **United Kingdom & Australia**: Localized labels, currency formatting, and compounding conventions.
-- **Pay It Off Faster**:
-  - Test extra monthly payments or annual lump sums on loan anniversaries.
-  - See exact interest saved and real calendar time shaved off your mortgage.
-- **Complete Housing Cost View**:
-  - Optional property taxes, home insurance, and condo/HOA/strata fees for accurate monthly budgeting.
-- **Interactive Multi-Graph Carousel (8 High-DPI Views)**:
-  - **Balance Over Time**: Plan vs. baseline comparison curve with interactive scrubbing.
-  - **Money Kept**: Cumulative interest race showing the widening green savings gap.
-  - **Tipping Point**: Monthly interest vs. principal crossover date when more of each payment goes to you than the bank.
-  - **Extra Payment Sensitivity**: Interactive curve showing interest and years saved; click any point to set your payment.
-  - **Strategy Leaderboard**: Side-by-side comparison of accelerated bi-weekly, +10%/+25%/Double-Up, extra monthly, and lump sum, with 1-click apply.
-  - **Cost of Waiting**: Real dollar cost of delaying prepayments by 1, 2, 3, or 5 years.
-  - **Lifetime Breakdown & Cash Flow**: Stacked total cost and calendar year allocation.
-  - Interactive scrubbing, touch swipe, zoom enlargement, and live plain-English takeaway captions on every slide.
-- **Full Schedule & CSV Export**:
-  - Yearly milestone view (5-Yr Renewal, Tipping Point, 50% Equity, Debt-Free).
-  - Detailed payment-by-payment monthly breakdown with one-click CSV export.
+---
+
+## ✨ Key Features & Recent Updates
+
+### 🏛️ Prada-Grade "Mortgage Horizons" Executive Showcase
+- **Executive Milestone Cards**: A dedicated gallery located directly above the schedule showcasing the 4 seminal financial landmarks of your mortgage journey:
+  - **↺ 5-Yr Term Renewal**: Remaining balance, cumulative principal paid down, equity percentage built, and fixed-term renewal checkpoint.
+  - **⚖ The Tipping Point**: The critical inflection date and annual dollar breakdown where principal repayment overtakes bank interest.
+  - **½ 50% Equity Landmark**: The exact date when the original loan balance is cut in half, marking accelerated equity momentum.
+  - **★ Mortgage-Free Destiny**: Final payoff date, $0.00 balance, total interest paid, and cumulative interest saved.
+- **Interactive Tap-to-Locate**: Clicking or tapping any milestone card smoothly scrolls the schedule table directly to that landmark year/month and illuminates the row with a transient luxury halo glow (`milestone-row-highlight`).
+- **Responsive Dual Presentation**: Expands into an executive 4-column runway gallery on desktop and collapses into a silky-smooth, horizontal swipeable ribbon with scroll-snapping and peek indicators on mobile screens.
+
+### 📱 Flawless Mobile Schedule Optimization
+- **Zero Horizontal Overflow**: The 5-column annual schedule (`Year`, `Interest`, `Principal`, `Extra`, `Balance`) fits comfortably on small phone screens (320px–390px) without horizontal scrolling or number clipping.
+- **Full-Width Editorial Divider Banners**: Milestone announcements span all 5 columns (`colspan="5"`) right above the landmark row, delivering rich context without bloating numeric table columns.
+- **Micro-Jewel Pips & Left Accents**: Compact indicator pips (`↺`, `⚖`, `½`, `★`) and signature left-border jewel accents (sapphire, emerald, amber, mint) highlight milestone rows cleanly.
+- **Responsive Date Typography**: Automatically locks full 4-digit years (`Nov 2026`) on desktop and compact short years (`Nov '26`) on mobile with both inline style guards and high-specificity stylesheet rules.
+
+### ⚡ Prepayment Privilege Suite (TD Payment Increase & RBC Double-Up)
+- **Payment Increase Privilege**: Interactive toggle and custom payment input to simulate lender-specific annual payment increase privileges.
+- **Quick-Action Chips**: One-tap presets for **Base**, **+10%**, **+25%**, and **Double-Up (2×)**.
+- **Prepayment Limits**: Live range hints showing base contractual payment and lender penalty-free caps.
+
+### 📊 Interactive 8-Slide Retina Chart Suite
+Zero-dependency custom Canvas charting engine with responsive touch-swipe, hover scrubbing, interactive tooltips, and plain-English takeaway captions:
+1. **Balance Over Time**: Plan vs. baseline payoff curves with interactive balance inspection.
+2. **Money Kept**: Cumulative interest race illustrating the widening green savings gap.
+3. **Tipping Point**: Month-by-month principal vs. interest crossover curve.
+4. **Extra Payment Sensitivity**: Curve of interest and years saved; click any point to set your payment.
+5. **Strategy Comparison**: Side-by-side leaderboard (Accelerated Bi-Weekly, +10%, +25%, Double-Up, Extra Monthly, Lump Sum) with 1-click apply.
+6. **Cost of Waiting**: Real dollar cost of delaying prepayments by 1, 2, 3, or 5 years.
+7. **Lifetime Breakdown**: Stacked interactive cost allocation (Principal, Interest, Extra).
+8. **Annual Cash Flow**: Year-by-year cash allocation bars.
+- **Chart Zoom / Enlarge**: Fullscreen expansion toggle (`+` / `−`) for deep analysis on any screen size.
+
+### 🌎 Automatic Multi-Regional Rules
+- **Canada (CA)**: Semi-annual compounding and statutory CMHC mortgage loan insurance rules with tier validations.
+- **United States (US)**: Monthly compounding and automatic Private Mortgage Insurance (PMI) cancellation at 78% LTV.
+- **United Kingdom (UK) & Australia (AU)**: Localized terminology, stamp duty / fee conventions, and currency formatting.
+
+### 🌓 Milanese Atelier Design System
+- **Theme Switching**: Dark and Light themes with automatic system detection, manual toggle, and localStorage persistence.
+- **Complete Housing Cost View**: Property taxes, home insurance, and condo/HOA/strata fees for realistic monthly cash flow budgeting.
+- **Data Portability**: One-click full schedule CSV export, print-ready statement mode (`@media print`), and URL plan sharing.
 
 ---
 
@@ -49,7 +70,17 @@ TrueMortgage is built exclusively for **mortgages**. It cuts out unnecessary deb
 - Node.js &ge; 20.0.0
 - npm &ge; 10.0.0
 
-### Run Tests
+### Install Dependencies
+```bash
+npm install
+```
+
+### Start Local Development Server
+```bash
+npm run dev
+```
+
+### Run Vitest Test Suite
 ```bash
 npm test
 ```
@@ -62,5 +93,7 @@ npm run build
 ---
 
 ## 🛡️ Privacy & Performance
-- **Zero-Cloud, 100% Client-Side**: No financial data is ever collected or transmitted.
-- **Lightweight**: Zero external UI/charting dependencies.
+
+- **Zero Cloud Storage**: All calculations run 100% locally in your browser.
+- **Zero Tracking**: No analytics, cookies, or remote data transmission.
+- **Instantaneous**: Zero heavy runtime frameworks or external charting dependencies.
