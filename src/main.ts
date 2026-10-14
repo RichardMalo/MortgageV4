@@ -209,6 +209,93 @@ const syncVisibility = () => {
   $('compounding-hint').textContent = hints.join(' ');
 };
 
+const escapeHtml = (s: string) =>
+  s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
+
+interface MilestoneData {
+  key: 'term' | 'tipping' | 'half' | 'free';
+  title: string;
+  pillClass: string;
+  badgeClass: string;
+  icon: string;
+  year: number;
+  monthIndex: number;
+  dateStr: string;
+  mainMetric: string;
+  subMetric: string;
+  descText: string;
+  badgeDesktop: string;
+  pipMobile: string;
+  dividerDetail: string;
+}
+
+const scrollToMilestone = (key: string, targetYear: number, targetMonth: number) => {
+  const details = document.querySelector<HTMLDetailsElement>('details.schedule');
+  if (details && !details.open) {
+    details.open = true;
+  }
+
+  const isMonthly = scheduleView === 'monthly';
+  let targetRow: HTMLElement | null = null;
+
+  if (isMonthly) {
+    targetRow = document.getElementById(`schedule-row-month-${targetMonth}`);
+  } else {
+    targetRow = document.getElementById(`schedule-row-year-${targetYear}`);
+  }
+
+  if (targetRow) {
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    targetRow.classList.remove('milestone-row-highlight');
+    void targetRow.offsetWidth; // Force DOM reflow to re-trigger CSS pulse
+    targetRow.classList.add('milestone-row-highlight');
+    setTimeout(() => {
+      targetRow?.classList.remove('milestone-row-highlight');
+    }, 2400);
+  }
+};
+
+const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
+  const container = $('milestones-showcase');
+  const wrap = $('milestones-showcase-wrap');
+  const countEl = $('milestones-count');
+  if (!container || !wrap) return;
+
+  if (milestones.length === 0) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  if (countEl) {
+    countEl.textContent = `${milestones.length} Landmarks`;
+  }
+
+  container.innerHTML = milestones
+    .map(
+      (m) => `
+    <div class="milestone-card milestone-card-${m.key}" data-milestone="${m.key}" data-year="${m.year}" data-month="${m.monthIndex}" role="button" tabindex="0" aria-label="${escapeHtml(m.title)} milestone in Year ${m.year}">
+      <div class="milestone-card-top">
+        <span class="milestone-tag ${m.pillClass}">
+          <span class="milestone-tag-glyph" aria-hidden="true">${m.icon}</span>
+          <span>${escapeHtml(m.title)}</span>
+        </span>
+        <span class="milestone-card-target">Yr ${m.year}</span>
+      </div>
+      <div class="milestone-card-date">${escapeHtml(m.dateStr)}</div>
+      <div class="milestone-card-metric">
+        <span class="metric-main">${escapeHtml(m.mainMetric)}</span>
+        <span class="metric-sub">${escapeHtml(m.subMetric)}</span>
+      </div>
+      <div class="milestone-card-desc">${escapeHtml(m.descText)}</div>
+      <div class="milestone-card-foot">
+        <span class="milestone-card-action">View in schedule</span>
+        <span class="milestone-card-arrow" aria-hidden="true">↓</span>
+      </div>
+    </div>`
+    )
+    .join('');
+};
+
 // ---------- rendering ----------
 
 const render = () => {
@@ -405,7 +492,7 @@ const render = () => {
   let halfEquityYear = -1;
   const initialPrincipal = a.loanAmount;
 
-  if (!isMonthly && a.years) {
+  if (a.years && a.years.length > 0) {
     for (const yr of a.years) {
       if (tippingYear === -1 && yr.principal >= yr.interest) {
         tippingYear = yr.year;
@@ -416,15 +503,127 @@ const render = () => {
     }
   }
 
+  // Construct milestone landmark objects
+  const milestones: MilestoneData[] = [];
+  const hasMultipleYears = a.years && a.years.length > 1;
+
+  if (hasMultipleYears && initialPrincipal > 0) {
+    // 1. 5-Yr Term
+    if (a.years.length > 5) {
+      const y5 = a.years.find((y) => y.year === 5);
+      if (y5) {
+        const paidDown = Math.max(0, initialPrincipal - y5.endBalance);
+        const pctPaid = Math.round((paidDown / initialPrincipal) * 100);
+        milestones.push({
+          key: 'term',
+          title: '5-Yr Term',
+          pillClass: 'milestone-pill-term',
+          badgeClass: 'milestone-renewal',
+          icon: '↺',
+          year: 5,
+          monthIndex: Math.min(plan.rows.length, 5 * plan.periodsPerYear),
+          dateStr: formatMonthYear(y5.endDate, c),
+          mainMetric: money(y5.endBalance),
+          subMetric: 'Remaining balance',
+          descText: `${pctPaid}% of original loan paid down. Standard fixed-term concludes; major checkpoint to renew, refinance, or renegotiate terms.`,
+          badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr Term</span>',
+          pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>',
+          dividerDetail: `5-Yr Term Renewal · Balance: ${money(y5.endBalance)} (${pctPaid}% paid)`
+        });
+      }
+    }
+
+    // 2. Tipping Point
+    const effectiveTippingYear = tippingYear > 0 ? tippingYear : 1;
+    const yTip = a.years.find((y) => y.year === effectiveTippingYear) || a.years[0];
+    if (yTip) {
+      const tipMonthRow = plan.rows.find((r) => r.principal + r.extra >= r.interest);
+      const tipMonth = tipMonthRow ? tipMonthRow.n : Math.min(plan.rows.length, effectiveTippingYear * plan.periodsPerYear);
+      milestones.push({
+        key: 'tipping',
+        title: 'Tipping Point',
+        pillClass: 'milestone-pill-tipping',
+        badgeClass: 'milestone-tipping',
+        icon: '⚖',
+        year: effectiveTippingYear,
+        monthIndex: tipMonth,
+        dateStr: formatMonthYear(yTip.endDate, c),
+        mainMetric: 'Principal > Interest',
+        subMetric: `${money(yTip.principal)} vs ${money(yTip.interest)}`,
+        descText:
+          effectiveTippingYear === 1
+            ? 'From Day 1, your scheduled payments pay off more mortgage principal than bank interest.'
+            : 'The equity inflection point. From this milestone forward, the majority of every dollar you pay builds your home equity rather than bank interest.',
+        badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>',
+        pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
+        dividerDetail: `Principal overtakes interest · ${money(yTip.principal)} vs ${money(yTip.interest)}`
+      });
+    }
+
+    // 3. 50% Equity
+    if (halfEquityYear > 0) {
+      const yHalf = a.years.find((y) => y.year === halfEquityYear) || a.years[a.years.length - 1];
+      if (yHalf) {
+        const halfMonthRow = plan.rows.find((r) => r.balance <= initialPrincipal * 0.5);
+        const halfMonth = halfMonthRow ? halfMonthRow.n : Math.min(plan.rows.length, halfEquityYear * plan.periodsPerYear);
+        milestones.push({
+          key: 'half',
+          title: '50% Equity',
+          pillClass: 'milestone-pill-half',
+          badgeClass: 'milestone-half',
+          icon: '½',
+          year: halfEquityYear,
+          monthIndex: halfMonth,
+          dateStr: formatMonthYear(yHalf.endDate, c),
+          mainMetric: money(yHalf.endBalance),
+          subMetric: '50% loan cleared',
+          descText: `Halfway to debt freedom. Balance cut in half to ${money(yHalf.endBalance)}. From here, principal reduction compounds with rapid momentum.`,
+          badgeDesktop: '<span class="milestone-badge milestone-half">50% Equity</span>',
+          pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>',
+          dividerDetail: `50% Equity Landmark · Balance: ${money(yHalf.endBalance)}`
+        });
+      }
+    }
+
+    // 4. Mortgage-Free
+    const yLast = a.years[a.years.length - 1];
+    if (yLast) {
+      const savedInfo = a.hasStrategy && a.interestSaved > 0 ? ` (saved ${money(a.interestSaved)})` : '';
+      milestones.push({
+        key: 'free',
+        title: 'Mortgage-Free',
+        pillClass: 'milestone-pill-free',
+        badgeClass: 'milestone-free',
+        icon: '★',
+        year: yLast.year,
+        monthIndex: plan.rows.length,
+        dateStr: formatMonthYear(plan.payoffDate, c),
+        mainMetric: '$0 Balance',
+        subMetric: '100% Home equity',
+        descText: `Total freedom. Entire loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}. Total interest paid: ${money(plan.totalInterest)}${savedInfo}.`,
+        badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
+        pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>',
+        dividerDetail: '100% Debt-Free · $0 Balance · Fully Owned'
+      });
+    }
+  }
+
+  // Render the Prada Milestone Horizons Showcase
+  renderMilestonesShowcase(milestones);
+
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 640;
+
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
         .map((r) => {
           const m = r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short' });
           const y = r.date.getFullYear();
           const y2 = String(y).slice(-2);
-          return `<tr>
+          const matchedMilestone = milestones.find((ms) => ms.monthIndex === r.n);
+          const rowClass = matchedMilestone ? `milestone-row row-milestone-${matchedMilestone.key}` : '';
+          return `<tr class="${rowClass}" id="schedule-row-month-${r.n}">
             <td class="col-num">${r.n}</td>
-            <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span></td>
+            <td class="col-date">${m} <span class="date-yr-full" style="${isMobile ? 'display:none' : ''}">${y}</span><span class="date-yr-short" style="${isMobile ? '' : 'display:none'}">'${y2}</span></td>
             <td class="col-payment">${money(r.scheduled + r.extra, false)}</td>
             <td class="col-interest">${money(r.interest, false)}</td>
             <td class="col-principal">${money(r.principal, false)}</td>
@@ -435,29 +634,37 @@ const render = () => {
         .join('')
     : a.years
         .map((y, idx) => {
-          const isLast = idx === a.years.length - 1;
-          const badges: string[] = [];
+          const matching = milestones.filter((ms) => ms.year === y.year);
+          const badges = matching.map((ms) => ms.badgeDesktop);
+          const pips = matching.map((ms) => ms.pipMobile);
+          const primaryMilestone = matching[0];
+          const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
 
-          if (y.year === 5 && !isLast) {
-            badges.push('<span class="milestone-badge milestone-renewal">5-Yr Term</span>');
-          }
-          if (y.year === tippingYear && !isLast) {
-            badges.push('<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>');
-          }
-          if (y.year === halfEquityYear && !isLast && y.year !== tippingYear) {
-            badges.push('<span class="milestone-badge milestone-half">50% Equity</span>');
-          }
-          if (isLast) {
-            badges.push('<span class="milestone-badge milestone-free">★ Free</span>');
+          let dividerHtml = '';
+          if (matching.length > 0) {
+            dividerHtml = `<tr class="milestone-banner-row milestone-banner-${primaryMilestone.key}" data-for-year="${y.year}">
+              <td colspan="5">
+                <div class="milestone-banner-capsule capsule-${primaryMilestone.key}">
+                  ${matching
+                    .map(
+                      (m) =>
+                        `<span class="milestone-banner-badge ${m.badgeClass}">${m.icon} ${escapeHtml(m.title)}</span>` +
+                        `<span class="milestone-banner-text">${escapeHtml(m.dividerDetail)}</span>`
+                    )
+                    .join('<span class="milestone-banner-sep" aria-hidden="true">·</span>')}
+                </div>
+              </td>
+            </tr>`;
           }
 
-          const rowClass = badges.length > 0 ? 'milestone-row' : '';
+          const y2 = String(y.endDate.getFullYear()).slice(-2);
 
-          return `<tr class="${rowClass}">
+          return `${dividerHtml}<tr class="${rowClass}" id="schedule-row-year-${y.year}">
             <td class="col-year">
               <span class="year-num">${y.year}</span>
-              <span class="year-date muted">${y.endDate.getFullYear()}</span>
-              ${badges.join('')}
+              <span class="year-date muted"><span class="date-yr-full" style="${isMobile ? 'display:none' : ''}">${y.endDate.getFullYear()}</span><span class="date-yr-short" style="${isMobile ? '' : 'display:none'}">'${y2}</span></span>
+              <span class="milestone-badge-desktop">${badges.join('')}</span>
+              <span class="milestone-pip-mobile">${pips.join('')}</span>
             </td>
             <td class="col-interest">${money(y.interest)}</td>
             <td class="col-principal">${money(y.principal)}</td>
@@ -467,9 +674,6 @@ const render = () => {
         })
         .join('');
 };
-
-const escapeHtml = (s: string) =>
-  s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
 // ---------- CSV & Share ----------
 
@@ -707,7 +911,30 @@ const bind = () => {
   $('btn-theme')?.addEventListener('click', toggleTheme);
   $('btn-print')?.addEventListener('click', () => window.print());
   $('btn-print-table')?.addEventListener('click', () => window.print());
-  $('btn-csv').addEventListener('click', downloadCsv);
+  $('btn-csv')?.addEventListener('click', downloadCsv);
+  // Milestone Showcase navigation
+  const showcase = $('milestones-showcase');
+  if (showcase) {
+    showcase.addEventListener('click', (e) => {
+      const card = (e.target as HTMLElement).closest<HTMLElement>('.milestone-card');
+      if (!card) return;
+      const yr = parseInt(card.dataset.year || '0', 10);
+      const mo = parseInt(card.dataset.month || '0', 10);
+      const key = card.dataset.milestone || '';
+      scrollToMilestone(key, yr, mo);
+    });
+    showcase.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        const card = (e.target as HTMLElement).closest<HTMLElement>('.milestone-card');
+        if (!card) return;
+        e.preventDefault();
+        const yr = parseInt(card.dataset.year || '0', 10);
+        const mo = parseInt(card.dataset.month || '0', 10);
+        const key = card.dataset.milestone || '';
+        scrollToMilestone(key, yr, mo);
+      }
+    });
+  }
 
   $('mortgage-form').addEventListener('submit', (e) => e.preventDefault());
 };
@@ -717,4 +944,13 @@ window.addEventListener('DOMContentLoaded', () => {
   syncForm();
   bind();
   render();
+});
+
+let lastIsMobile = typeof window !== 'undefined' ? window.innerWidth <= 640 : false;
+window.addEventListener('resize', () => {
+  const isMobile = window.innerWidth <= 640;
+  if (isMobile !== lastIsMobile) {
+    lastIsMobile = isMobile;
+    render();
+  }
 });
