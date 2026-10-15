@@ -229,6 +229,11 @@ describe('Canada', () => {
     expect(a.loanAmount).toBe(400_000);
   });
 
+  it('flags an insured mortgage exceeding 30 years', () => {
+    const a = analyzeMortgage(base({ homePrice: 500_000, downPayment: 50_000, amortizationYears: 35 }));
+    expect(a.notes.some((n) => n.level === 'error' && n.text.includes('limited to a 30-year amortization'))).toBe(true);
+  });
+
   it('flags a down payment below the legal minimum', () => {
     const a = analyzeMortgage(base({ homePrice: 800_000, downPayment: 40_000 }));
     expect(a.notes.some((n) => n.level === 'error')).toBe(true);
@@ -282,13 +287,21 @@ describe('housing costs', () => {
 });
 
 describe('inputs and dates', () => {
-  it('sanitizes bad values', () => {
-    const s = sanitizeInputs({ homePrice: -5, downPayment: 1e12, annualRate: NaN, amortizationYears: 99, frequency: 'daily' as never });
+  it('sanitizes bad values and invalid calendar dates', () => {
+    const s = sanitizeInputs({
+      homePrice: -5,
+      downPayment: 1e12,
+      annualRate: NaN,
+      amortizationYears: 99,
+      frequency: 'daily' as never,
+      startDate: '2026-13-45'
+    });
     expect(s.homePrice).toBe(0);
     expect(s.downPayment).toBe(0);
     expect(s.annualRate).toBe(DEFAULT_INPUTS.annualRate);
     expect(s.amortizationYears).toBe(40);
     expect(s.frequency).toBe('monthly');
+    expect(s.startDate).toBe(DEFAULT_INPUTS.startDate);
   });
 
   it('clamps month-end dates instead of overflowing', () => {

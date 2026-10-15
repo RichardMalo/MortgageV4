@@ -697,7 +697,7 @@ export const strategiesChart: InsightChart = {
       };
       if (wide) {
         if (i === 0) tag('Most savings', colors.extraColor);
-        if (s === bestValue) tag('Best value', colors.warnColor);
+        if (s === bestValue && bestValue.perDollar > 0) tag('Best value', colors.warnColor);
       }
 
       // Value (right)
@@ -753,7 +753,7 @@ export const strategiesChart: InsightChart = {
       <div class="tip-row plan"><span>Time saved:</span> <strong>${formatDuration(s.monthsSaved)}</strong></div>
       <div class="tip-row muted"><span>Extra cash per year:</span> <strong>${money(a, s.extraPerYear)}</strong></div>
       <div class="tip-row muted"><span>Debt-free:</span> <strong>${monthYear(a, s.payoffDate)}</strong></div>
-      <div class="tip-row muted"><span>Saved per ${money(a, 1)} extra:</span> <strong>${formatMoney(s.perDollar, a.inputs.country, true)}</strong></div>
+      ${s.perDollar > 0 ? `<div class="tip-row muted"><span>Saved per ${money(a, 1)} extra:</span> <strong>${formatMoney(s.perDollar, a.inputs.country, true)}</strong></div>` : ''}
       ${s.isCurrent ? tipCta('This is your current plan') : tipCta('Click to apply this strategy')}
     `;
   },
@@ -762,13 +762,18 @@ export const strategiesChart: InsightChart = {
     const list = d.strategies;
     if (list.length === 0) return '';
     const top = list[0]!;
-    const candidates = list.filter((s) => !s.isCurrent);
-    const value = candidates.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), candidates[0] ?? top);
+    const candidates = list.filter((s) => !s.isCurrent && s.perDollar > 0);
+    const value = candidates.length > 0
+      ? candidates.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), candidates[0]!)
+      : null;
     const current = list.find((s) => s.isCurrent);
     const rank = current ? list.indexOf(current) + 1 : 0;
-    const lead = `${b(top.label)} saves the most (${b(money(a, top.interestSaved))}). Best value per dollar: ${b(value.label)} at ${b(
-      formatMoney(value.perDollar, a.inputs.country, true)
-    )} saved per ${money(a, 1)}.`;
+    const valuePart = value
+      ? ` Best value per dollar: ${b(value.label)} at ${b(
+          formatMoney(value.perDollar, a.inputs.country, true)
+        )} saved per ${money(a, 1)}.`
+      : '';
+    const lead = `${b(top.label)} saves the most (${b(money(a, top.interestSaved))}).${valuePart}`;
     const yours = current ? ` Your plan ranks ${b(`#${rank} of ${list.length}`)}.` : ' Tap a bar to apply it.';
     return lead + yours;
   },

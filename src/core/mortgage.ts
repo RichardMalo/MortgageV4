@@ -17,6 +17,7 @@ import {
 } from './types.js';
 import {
   CMHC_LONG_AMORTIZATION_SURCHARGE,
+  CMHC_MAX_AMORTIZATION,
   CMHC_MAX_PRICE,
   CMHC_TIERS,
   DEFAULT_INPUTS,
@@ -33,6 +34,14 @@ const num = (v: unknown, fallback: number): number => {
 };
 export const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 
+/** True for a real calendar date in YYYY-MM-DD form (rejects e.g. 2026-02-30 or 2026-13-01). */
+const isValidIsoDate = (s: unknown): s is string => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number) as [number, number, number];
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+};
+
 /** Coerces any (possibly stale or hand-edited) input object into a valid one. */
 export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => {
   const d = DEFAULT_INPUTS;
@@ -48,7 +57,7 @@ export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => 
     annualRate: clamp(num(raw.annualRate, d.annualRate), 0, 30),
     amortizationYears: clamp(num(raw.amortizationYears, d.amortizationYears), 1, 40),
     frequency,
-    startDate: /^\d{4}-\d{2}-\d{2}$/.test(raw.startDate || '') ? raw.startDate! : d.startDate,
+    startDate: isValidIsoDate(raw.startDate) ? raw.startDate : d.startDate,
     extraMonthly: clamp(num(raw.extraMonthly, 0), 0, 1e7),
     annualLumpSum: clamp(num(raw.annualLumpSum, 0), 0, 1e9),
     paymentIncreaseEnabled: Boolean(raw.paymentIncreaseEnabled),
@@ -219,6 +228,21 @@ export const cmhcPremiumRate = (ltv: number, amortizationYears: number): number 
   return tier.rate + (amortizationYears > 25 ? CMHC_LONG_AMORTIZATION_SURCHARGE : 0);
 };
 
+/**
+ * Prepayments per year that count toward the region's penalty-free cap
+ * (extra monthly + lump sum, plus any payment increase where the region counts it).
+ */
+export const cappedPrepaymentPerYear = (
+  country: MortgageInputs['country'],
+  extraMonthly: number,
+  annualLumpSum: number,
+  paymentIncrease: number,
+  periodsPerYear: number
+): number =>
+  extraMonthly * 12 +
+  annualLumpSum +
+  (REGIONS[country].prepaymentCapIncludesIncrease ? paymentIncrease * periodsPerYear : 0);
+
 /** Groups the schedule by loan year. */
 export const summarizeByYear = (s: ScheduleResult): YearRow[] => {
   const years: YearRow[] = [];
@@ -292,7 +316,12 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
             insurance.premium
           )} (${(rate * 100).toFixed(2)}%) has been added to your loan. In ON, QC and SK, sales tax on the premium is paid at closing.`
         });
-        if (inputs.amortizationYears > 25) {
+        if (inputs.amortizationYears > CMHC_MAX_AMORTIZATION) {
+          notes.push({
+            level: 'error',
+            text: `Insured mortgages in Canada (less than 20% down) are limited to a ${CMHC_MAX_AMORTIZATION}-year amortization.`
+          });
+        } else if (inputs.amortizationYears > 25) {
           notes.push({
             level: 'warn',
             text: 'Insured mortgages over 25 years are only available to first-time buyers or buyers of newly built homes.'
@@ -374,17 +403,24 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
     });
   }
 
-  if (inputs.amortizationYears > 30) {
+  if (inputs.amortizationYears > 30 && insurance.kind !== 'cmhc') {
     notes.push({ level: 'info', text: 'Amortizations longer than 30 years are uncommon and greatly increase total interest.' });
   }
 
-  const yearlyPrepay = inputs.extraMonthly * 12 + inputs.annualLumpSum;
+  const yearlyPrepay = cappedPrepaymentPerYear(
+    inputs.country,
+    inputs.extraMonthly,
+    inputs.annualLumpSum,
+    paymentIncrease,
+    plan.periodsPerYear
+  );
   if (region.prepaymentCap && loanAmount > 0 && yearlyPrepay > loanAmount * region.prepaymentCap) {
+    const basis = inputs.mode === 'existing' ? 'the original loan (estimated here from your current balance)' : 'the original loan';
     notes.push({
       level: 'warn',
-      text: `Many ${region.name === 'Canada' ? 'Canadian' : 'UK'} lenders limit penalty-free prepayments to about ${
+      text: `You're prepaying ${money(yearlyPrepay)}/year. Many ${region.name === 'Canada' ? 'Canadian' : 'UK'} lenders limit penalty-free prepayments to about ${
         region.prepaymentCap * 100
-      }% of the original loan per year (${money(loanAmount * region.prepaymentCap)}). Check your mortgage terms.`
+      }% of ${basis} per year (${money(loanAmount * region.prepaymentCap)}). Check your mortgage terms.`
     });
   }
 

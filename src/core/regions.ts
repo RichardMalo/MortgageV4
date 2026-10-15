@@ -16,6 +16,12 @@ export interface Region {
   feesLabel: string;
   /** Typical annual prepayment allowance (fraction of original principal) before penalties, if commonly capped. */
   prepaymentCap?: number;
+  /**
+   * Whether a permanent payment increase counts toward `prepaymentCap`.
+   * Canada: no — "increase payment" is a separate privilege from the lump-sum allowance.
+   * UK: yes — every overpayment counts toward the yearly overpayment allowance.
+   */
+  prepaymentCapIncludesIncrease?: boolean;
 }
 
 export const REGIONS: Record<Country, Region> = {
@@ -46,7 +52,8 @@ export const REGIONS: Record<Country, Region> = {
     insurance: 'none',
     propertyTaxLabel: 'Council tax',
     feesLabel: 'Service charge',
-    prepaymentCap: 0.1
+    prepaymentCap: 0.1,
+    prepaymentCapIncludesIncrease: true
   },
   AU: {
     name: 'Australia',
@@ -76,6 +83,8 @@ export const CMHC_TIERS = [
 ] as const;
 export const CMHC_LONG_AMORTIZATION_SURCHARGE = 0.002; // +0.20% when amortization > 25 years
 export const CMHC_MAX_PRICE = 1_500_000;
+/** Longest amortization allowed on an insured (high-ratio) Canadian mortgage. */
+export const CMHC_MAX_AMORTIZATION = 30;
 
 /** US: borrower-paid PMI cancels automatically at 78% of the original home value (Homeowners Protection Act). */
 export const PMI_AUTO_CANCEL_LTV = 0.78;

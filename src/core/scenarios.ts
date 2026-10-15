@@ -8,7 +8,7 @@
  */
 
 import { Analysis, MortgageInputs, ScheduleResult } from './types.js';
-import { buildSchedule, parseDate, paymentDate, round2, ScheduleParams } from './mortgage.js';
+import { buildSchedule, cappedPrepaymentPerYear, parseDate, paymentDate, round2, ScheduleParams } from './mortgage.js';
 import { REGIONS } from './regions.js';
 import { isoDate } from './format.js';
 
@@ -107,11 +107,10 @@ export const extraPaymentSweep = (a: Analysis, steps = 20, nudge = 100): ExtraSw
 
   const region = REGIONS[a.inputs.country];
   const perYear = a.plan.periodsPerYear;
+  // Room left under the cap once the lump sum (and, where counted, the payment increase) is used.
+  const otherPrepay = cappedPrepaymentPerYear(a.inputs.country, 0, a.inputs.annualLumpSum, a.paymentIncrease, perYear);
   const capExtraMonthly = region.prepaymentCap
-    ? Math.max(
-        0,
-        (a.loanAmount * region.prepaymentCap - a.inputs.annualLumpSum - a.paymentIncrease * perYear) / 12
-      )
+    ? Math.max(0, (a.loanAmount * region.prepaymentCap - otherPrepay) / 12)
     : null;
 
   const zero = points[0]!;
@@ -171,7 +170,7 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     isCurrent = false
   ): Strategy => {
     const months = scheduleMonths(s);
-    const committed = Math.max(1, extraPerYear * (months / 12));
+    const committed = Math.max(0, extraPerYear) * (months / 12);
     const interestSaved = round2(Math.max(0, a.baseline.totalInterest - s.totalInterest));
     return {
       id,
@@ -181,7 +180,8 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
       monthsSaved: Math.max(0, a.baseline.numPayments - months),
       extraPerYear: round2(Math.max(0, extraPerYear)),
       payoffDate: s.payoffDate,
-      perDollar: interestSaved / committed,
+      // Undefined (0) when the strategy costs no extra cash, e.g. regular bi-weekly.
+      perDollar: committed >= 1 ? interestSaved / committed : 0,
       patch,
       isCurrent
     };
@@ -342,8 +342,11 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
     }
   }
 
+  // After `t` elapsed years, the latest payment made is payment #(12t).
   const crossDate =
-    crossYears === null ? null : paymentDate(parseDate(startDate), Math.round(crossYears * 12) + 1, 'monthly');
+    crossYears === null
+      ? null
+      : paymentDate(parseDate(startDate), Math.max(1, Math.round(crossYears * 12)), 'monthly');
   return { series, crossYears, crossDate };
 };
 
