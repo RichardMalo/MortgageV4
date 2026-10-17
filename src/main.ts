@@ -467,16 +467,16 @@ const render = () => {
     theadRow.innerHTML = isMonthly
       ? `<th class="col-num">#</th>
          <th class="col-date">Date</th>
-         <th class="col-payment">Payment</th>
-         <th class="col-interest">Interest</th>
-         <th class="col-principal">Principal</th>
+         <th class="col-payment"><span class="th-full">Payment</span><span class="th-short">Pmt</span></th>
+         <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
+         <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
          <th class="col-extra">Extra</th>
-         <th class="col-balance">Balance</th>`
-      : `<th class="col-year">Year</th>
-         <th class="col-interest">Interest</th>
-         <th class="col-principal">Principal</th>
+         <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`
+      : `<th class="col-year"><span class="th-full">Year</span><span class="th-short">Yr</span></th>
+         <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
+         <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
          <th class="col-extra">Extra</th>
-         <th class="col-balance">Balance</th>`;
+         <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`;
   }
 
   const scheduleTitle = $('schedule-title');
@@ -533,7 +533,7 @@ const render = () => {
           mainMetric: money(y5.endBalance),
           subMetric: 'Remaining balance',
           descText: `${pctPaid}% of loan paid down · Fixed term concludes; renew or refinance checkpoint.`,
-          badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr Term</span>',
+          badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr</span>',
           pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>',
           dividerDetail: `5-Yr Term Renewal · Balance: ${money(y5.endBalance)} (${pctPaid}% paid)`
         });
@@ -567,7 +567,7 @@ const render = () => {
             tippingYear === 1
               ? 'From Day 1, your payments build more equity than bank interest.'
               : 'Equity inflection point: payments build equity faster than bank interest.',
-          badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
           pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
           dividerDetail: `Principal overtakes interest · ${money(yTipPrincipal)} vs ${money(yTip.interest)}`
         });
@@ -592,7 +592,7 @@ const render = () => {
           mainMetric: money(yHalf.endBalance),
           subMetric: '50% loan cleared',
           descText: `Halfway mark · Balance halved to ${money(yHalf.endBalance)} as payoff accelerates.`,
-          badgeDesktop: '<span class="milestone-badge milestone-half">50% Equity</span>',
+          badgeDesktop: '<span class="milestone-badge milestone-half">50%</span>',
           pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>',
           dividerDetail: `50% Equity Landmark · Balance: ${money(yHalf.endBalance)}`
         });
@@ -649,33 +649,15 @@ const render = () => {
         })
         .join('')
     : a.years
-        .map((y, idx) => {
+        .map((y) => {
           const matching = milestones.filter((ms) => ms.year === y.year);
           const badges = matching.map((ms) => ms.badgeDesktop);
           const pips = matching.map((ms) => ms.pipMobile);
           const primaryMilestone = matching[0];
           const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
-
-          let dividerHtml = '';
-          if (matching.length > 0) {
-            dividerHtml = `<tr class="milestone-banner-row milestone-banner-${primaryMilestone.key}" data-for-year="${y.year}">
-              <td colspan="5">
-                <div class="milestone-banner-capsule capsule-${primaryMilestone.key}">
-                  ${matching
-                    .map(
-                      (m) =>
-                        `<span class="milestone-banner-badge ${m.badgeClass}">${m.icon} ${escapeHtml(m.title)}</span>` +
-                        `<span class="milestone-banner-text">${escapeHtml(m.dividerDetail)}</span>`
-                    )
-                    .join('<span class="milestone-banner-sep" aria-hidden="true">·</span>')}
-                </div>
-              </td>
-            </tr>`;
-          }
-
           const y2 = String(y.endDate.getFullYear()).slice(-2);
 
-          return `${dividerHtml}<tr class="${rowClass}" id="schedule-row-year-${y.year}">
+          return `<tr class="${rowClass}" id="schedule-row-year-${y.year}">
             <td class="col-year">
               <span class="year-num">${y.year}</span>
               <span class="year-date muted"><span class="date-yr-full">${y.endDate.getFullYear()}</span><span class="date-yr-short">'${y2}</span></span>
