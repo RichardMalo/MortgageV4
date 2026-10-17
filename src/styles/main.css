@@ -1150,22 +1150,21 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .chart-header {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  row-gap: 10px;
   align-items: center;
   margin-bottom: 12px;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .chart-title-group {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+  display: contents;
 }
 
 .chart-active-title {
+  grid-column: 1;
+  grid-row: 1;
   margin-bottom: 0;
   font-weight: 600;
   font-size: 0.95rem;
@@ -1173,16 +1172,17 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .chart-tabs {
-  display: inline-flex;
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  width: 100%;
+  min-width: 0;
   background: var(--input);
   padding: 3px;
   border-radius: var(--radius-md);
   border: 1px solid var(--border);
   gap: 2px;
-  overflow-x: auto;
-  max-width: 100%;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
+  overflow: hidden;
 }
 
 .chart-tabs::-webkit-scrollbar {
@@ -1193,16 +1193,18 @@ input[type='number']::-webkit-outer-spin-button {
   background: transparent;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 4px 10px;
+  padding: 5px 4px;
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: clamp(0.66rem, 0.95vw, 0.75rem);
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
   transition: all 0.15s ease;
   line-height: 1.25;
   white-space: nowrap;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
 }
 
 .chart-tab-btn:hover {
@@ -1217,6 +1219,9 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .chart-expand-btn {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -1243,38 +1248,15 @@ input[type='number']::-webkit-outer-spin-button {
 
 @media (max-width: 640px) {
   .chart-header {
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
     row-gap: 8px;
-    align-items: center;
-  }
-  .chart-title-group {
-    display: contents;
-  }
-  .chart-active-title {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .chart-expand-btn {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: end;
   }
   .chart-tabs {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: flex;
-    width: 100%;
     overflow-x: auto;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 3px;
   }
   .chart-tab-btn {
     flex: 0 0 auto;
-    white-space: nowrap;
-    text-align: center;
     padding: 6px 10px;
     font-size: 0.75rem;
   }

@@ -803,8 +803,9 @@ export class MortgageChartsManager {
       const active = idx === this.activeIndex;
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-selected', String(active));
-      if (active) {
-        tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+      if (active && this.tabsEl && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
+        const targetScroll = tab.offsetLeft - this.tabsEl.clientWidth / 2 + tab.offsetWidth / 2;
+        this.tabsEl.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
       }
     });
 
