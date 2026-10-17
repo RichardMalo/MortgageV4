@@ -374,7 +374,7 @@ export const tippingChart: InsightChart = {
 
     // Plan tipping point
     if (px !== null) {
-      const x = g.getX(Math.max(px, d.planTip.series[0]?.x ?? 0));
+      const x = g.getX(px);
       const y = g.getY(valueAt(d.planTip.series, px, 'interest'));
       guideLine(ctx, x, dims, colors);
       dot(ctx, x, y, colors.extraColor, colors.cardBg, 6);
@@ -411,7 +411,7 @@ export const tippingChart: InsightChart = {
     const p = d.planTip.series[i];
     const base = d.baseTip.series[i];
     const share = (s: YearSplit) => Math.round((s.principal / Math.max(1, s.principal + s.interest)) * 100);
-    const year = dateAfter(a, i + 1).getFullYear();
+    const year = a.years[i]?.endDate.getFullYear() ?? dateAfter(a, i).getFullYear();
     if (!p) {
       return `
         <div class="tip-header">Year ${i + 1} <span class="tip-sub">· ${year}</span></div>
@@ -657,7 +657,11 @@ export const strategiesChart: InsightChart = {
     }
     const rowH = stratRowH(dims, list.length);
     const maxSaved = Math.max(1, ...list.map((s) => s.interestSaved));
-    const bestValue = list.reduce((best, s) => (s.perDollar > best.perDollar && !s.isCurrent ? s : best), list[0]!);
+    const candidates = list.filter((s) => !s.isCurrent && s.perDollar > 0);
+    const bestValue =
+      candidates.length > 0
+        ? candidates.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), candidates[0]!)
+        : null;
     const wide = dims.width > 460;
 
     list.forEach((s, i) => {
@@ -697,7 +701,7 @@ export const strategiesChart: InsightChart = {
       };
       if (wide) {
         if (i === 0) tag('Most savings', colors.extraColor);
-        if (s === bestValue && bestValue.perDollar > 0) tag('Best value', colors.warnColor);
+        if (bestValue && s === bestValue) tag('Best value', colors.warnColor);
       }
 
       // Value (right)

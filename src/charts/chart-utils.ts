@@ -151,12 +151,12 @@ export const formatCompactMoney = (val: number, country: Country = 'CA'): string
   const sign = val < 0 ? '−' : '';
   const abs = Math.abs(val);
 
-  if (abs >= 1_000_000) {
-    const m = abs / 1_000_000;
+  if (abs >= 999_950) {
+    const m = Math.round((abs / 1_000_000) * 10) / 10;
     return `${sign}${sym}${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
   }
   if (abs >= 1_000) {
-    const k = abs / 1_000;
+    const k = Math.round((abs / 1_000) * 10) / 10;
     return `${sign}${sym}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
   }
   return `${sign}${sym}${Math.round(abs)}`;

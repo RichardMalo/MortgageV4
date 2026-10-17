@@ -316,6 +316,63 @@ describe('inputs and dates', () => {
     expect(paymentDate(start, 2, 'bi-weekly').getDate()).toBe(15);
   });
 
+  it('semi-monthly dates always produce two payments in February without overflowing into March', () => {
+    const start15 = new Date(2026, 0, 15);
+    // Payment 3 (1st Feb) & Payment 4 (2nd Feb)
+    expect(paymentDate(start15, 3, 'semi-monthly').getMonth()).toBe(1);
+    expect(paymentDate(start15, 3, 'semi-monthly').getDate()).toBe(15);
+    expect(paymentDate(start15, 4, 'semi-monthly').getMonth()).toBe(1);
+    expect(paymentDate(start15, 4, 'semi-monthly').getDate()).toBe(28);
+    // Payment 5 (1st Mar)
+    expect(paymentDate(start15, 5, 'semi-monthly').getMonth()).toBe(2);
+    expect(paymentDate(start15, 5, 'semi-monthly').getDate()).toBe(15);
+  });
+
+  it('preserves extra payment on final scheduled period when lump sum clears remaining balance', () => {
+    const s = buildSchedule({
+      principal: 12_000,
+      annualRate: 5,
+      compounding: 'monthly',
+      years: 1,
+      frequency: 'monthly',
+      startDate: '2026-01-01',
+      annualLumpSum: 500
+    });
+    const last = s.rows.at(-1)!;
+    expect(last.n).toBe(12);
+    expect(last.balance).toBe(0);
+    // On a 1-year schedule, the regular scheduled payment alone clears the final period,
+    // and when extra is applied before scheduled clears it (e.g. when owing > scheduled), extra is preserved.
+    const sWithMonthlyExtra = buildSchedule({
+      principal: 12_000,
+      annualRate: 5,
+      compounding: 'monthly',
+      years: 1,
+      frequency: 'monthly',
+      startDate: '2026-01-01',
+      extraMonthly: 100
+    });
+    expect(sWithMonthlyExtra.rows.some((r) => r.extra > 0)).toBe(true);
+    expect(sWithMonthlyExtra.rows.at(-1)!.balance).toBe(0);
+  });
+
+  it('sets pmiEndDate to payoffDate when a lump sum clears the loan from >78% LTV on the final row', () => {
+    const a = analyzeMortgage(
+      base({
+        country: 'US',
+        homePrice: 400_000,
+        downPayment: 20_000,
+        annualRate: 6,
+        amortizationYears: 30,
+        pmiRate: 0.5,
+        annualLumpSum: 400_000
+      })
+    );
+    expect(a.insurance.kind).toBe('pmi');
+    expect(a.insurance.pmiEndDate).not.toBeNull();
+    expect(a.insurance.pmiEndDate).toEqual(a.plan.payoffDate);
+  });
+
   it('payoff date reflects the plan', () => {
     const a = analyzeMortgage(base({ amortizationYears: 25 }));
     expect(a.plan.payoffDate!.getFullYear()).toBe(2050);

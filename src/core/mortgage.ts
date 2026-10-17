@@ -103,9 +103,18 @@ export const paymentDate = (start: Date, n: number, frequency: Frequency): Date 
     case 12:
       return addMonthsClamped(start, i);
     case 24: {
-      const d = addMonthsClamped(start, Math.floor(i / 2));
-      if (i % 2 === 1) d.setDate(d.getDate() + 15);
-      return d;
+      if (start.getDate() <= 15) {
+        const d = addMonthsClamped(start, Math.floor(i / 2));
+        if (i % 2 === 1) {
+          const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+          d.setDate(Math.min(start.getDate() + 15, lastDay));
+        }
+        return d;
+      }
+      if (i % 2 === 0) {
+        return addMonthsClamped(start, i / 2);
+      }
+      return new Date(start.getFullYear(), start.getMonth() + Math.floor(i / 2) + 1, start.getDate() - 15);
     }
     case 26:
       return new Date(start.getFullYear(), start.getMonth(), start.getDate() + 14 * i);
@@ -180,12 +189,15 @@ export const buildSchedule = (p: ScheduleParams): ScheduleResult => {
     // Payment increase prepayment privilege (TD Payment Increase / RBC Double-Up) adds directly to principal.
     let extra = round2(extraPerPeriod + paymentIncrease + (n % perYear === 0 ? lump : 0));
 
-    if (n === lastScheduled || scheduled >= owing) {
-      // Final payment clears whatever is left (absorbs cent-rounding drift).
+    if (scheduled >= owing) {
+      // Scheduled payment alone clears whatever is left.
       scheduled = owing;
       extra = 0;
-    } else if (scheduled + extra > owing) {
+    } else if (scheduled + extra >= owing) {
       extra = round2(owing - scheduled);
+    } else if (n === lastScheduled) {
+      // Final scheduled payment absorbs any cent-rounding drift while preserving extra.
+      scheduled = round2(owing - extra);
     }
 
     const principal = round2(scheduled - interest);
@@ -380,6 +392,9 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
       }
       count++;
       opening = row.balance;
+    }
+    if (!insurance.pmiEndDate && plan.payoffDate) {
+      insurance.pmiEndDate = plan.payoffDate;
     }
     insurance.pmiTotal = round2(count * perPayment);
     notes.push({

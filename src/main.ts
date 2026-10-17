@@ -3,7 +3,7 @@
  * One form in, one analysis out. All math lives in ./core/mortgage.ts.
  */
 
-import { analyzeMortgage, clamp, sanitizeInputs } from './core/mortgage.js';
+import { analyzeMortgage, clamp, round2, sanitizeInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
 import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.js';
@@ -303,7 +303,8 @@ const render = () => {
   syncVisibility();
   const a = analyzeMortgage(state);
   lastAnalysis = a;
-  const c = state.country;
+  const inp = a.inputs;
+  const c = inp.country;
   const money = (x: number, cents = false) => formatMoney(x, c, cents);
   const { plan } = a;
 
@@ -312,8 +313,8 @@ const render = () => {
   // LTV Badge
   const ltvBadge = $('ltv-badge');
   if (ltvBadge) {
-    if (state.mode === 'purchase' && state.homePrice > 0) {
-      const ltv = ((state.homePrice - state.downPayment) / state.homePrice) * 100;
+    if (inp.mode === 'purchase' && inp.homePrice > 0) {
+      const ltv = ((inp.homePrice - inp.downPayment) / inp.homePrice) * 100;
       let status = 'Conventional';
       if (ltv > 80) {
         status = c === 'CA' ? 'Insured (CMHC)' : c === 'US' ? 'PMI Required' : 'High LTV';
@@ -325,7 +326,7 @@ const render = () => {
   }
 
   // Hero
-  const enabled = Boolean(state.paymentIncreaseEnabled);
+  const enabled = Boolean(inp.paymentIncreaseEnabled);
   const toggleEl = $<HTMLInputElement>('toggle-payment-increase');
   if (toggleEl) {
     if (toggleEl.checked !== enabled) toggleEl.checked = enabled;
@@ -339,7 +340,7 @@ const render = () => {
   const outFreq = $('out-frequency');
   const outFreqEditable = $('out-frequency-editable');
 
-  const freqNoun = FREQUENCIES[state.frequency].noun;
+  const freqNoun = FREQUENCIES[inp.frequency].noun;
   if (outFreq) outFreq.textContent = freqNoun;
   if (outFreqEditable) outFreqEditable.textContent = freqNoun;
 
@@ -356,8 +357,8 @@ const render = () => {
         customInput.min = String(a.basePayment);
         customInput.max = String(a.maxPayment);
         const currentVal =
-          state.customPayment && state.customPayment >= a.basePayment
-            ? state.customPayment
+          inp.customPayment && inp.customPayment >= a.basePayment
+            ? inp.customPayment
             : a.basePayment;
         setField(customInput, fmtNum(currentVal));
       }
@@ -369,11 +370,11 @@ const render = () => {
   }
 
   const sub: string[] = [];
-  if (hasLoan && state.frequency !== 'monthly') sub.push(`≈ ${money(a.monthlyEquivalent)} per month`);
+  if (hasLoan && inp.frequency !== 'monthly') sub.push(`≈ ${money(a.monthlyEquivalent)} per month`);
   if (hasLoan && a.paymentIncrease > 0) {
     sub.push(`Base: ${money(a.basePayment, true)} · ${money(a.paymentIncrease, true)} extra to principal`);
   }
-  if (hasLoan && state.extraMonthly > 0) sub.push(`plus ${money(state.extraMonthly)}/month extra`);
+  if (hasLoan && inp.extraMonthly > 0) sub.push(`plus ${money(inp.extraMonthly)}/month extra`);
   if (!hasLoan) sub.push('Enter a loan amount to see your payment.');
   $('out-hero-sub').textContent = sub.join(' · ');
 
@@ -381,9 +382,10 @@ const render = () => {
   $('out-loan').textContent = money(a.loanAmount);
   const loanSub = $('out-loan-sub');
   if (loanSub) {
-    if (state.mode === 'purchase') {
-      const ltv = state.homePrice > 0 ? ((a.loanAmount / state.homePrice) * 100).toFixed(0) : '0';
-      loanSub.textContent = `${ltv}% LTV · ${money(state.downPayment)} down`;
+    if (inp.mode === 'purchase') {
+      const baseLtv = inp.homePrice > 0 ? (((inp.homePrice - inp.downPayment) / inp.homePrice) * 100).toFixed(0) : '0';
+      const cmhcSuffix = a.insurance.kind === 'cmhc' ? ` + ${money(a.insurance.premium)} CMHC` : '';
+      loanSub.textContent = `${baseLtv}% LTV · ${money(inp.downPayment)} down${cmhcSuffix}`;
     } else {
       loanSub.textContent = 'Existing balance';
     }
@@ -438,9 +440,9 @@ const render = () => {
   // Monthly housing cost
   const costRows: Array<[string, number]> = [
     ['Mortgage payment', a.monthlyEquivalent],
-    [REGIONS[c].propertyTaxLabel, state.propertyTaxYearly / 12],
-    ['Home insurance', state.homeInsuranceYearly / 12],
-    [REGIONS[c].feesLabel, state.feesMonthly],
+    [REGIONS[c].propertyTaxLabel, inp.propertyTaxYearly / 12],
+    ['Home insurance', inp.homeInsuranceYearly / 12],
+    [REGIONS[c].feesLabel, inp.feesMonthly],
     ['PMI (until it cancels)', a.insurance.pmiMonthly]
   ];
   const hasCosts = hasLoan && costRows.slice(1).some(([, v]) => v > 0);
@@ -479,7 +481,11 @@ const render = () => {
 
   const scheduleTitle = $('schedule-title');
   if (scheduleTitle) {
-    scheduleTitle.textContent = isMonthly ? 'Monthly schedule' : 'Yearly schedule';
+    scheduleTitle.textContent = isMonthly
+      ? inp.frequency === 'monthly'
+        ? 'Monthly schedule'
+        : 'Payment schedule'
+      : 'Yearly schedule';
   }
 
   document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
@@ -495,7 +501,7 @@ const render = () => {
 
   if (a.years && a.years.length > 0) {
     for (const yr of a.years) {
-      if (tippingYear === -1 && yr.principal >= yr.interest) {
+      if (tippingYear === -1 && yr.principal + yr.extra >= yr.interest) {
         tippingYear = yr.year;
       }
       if (halfEquityYear === -1 && yr.endBalance <= initialPrincipal * 0.5) {
@@ -535,30 +541,37 @@ const render = () => {
     }
 
     // 2. Tipping Point
-    const effectiveTippingYear = tippingYear > 0 ? tippingYear : 1;
-    const yTip = a.years.find((y) => y.year === effectiveTippingYear) || a.years[0];
-    if (yTip) {
-      const tipMonthRow = plan.rows.find((r) => r.principal + r.extra >= r.interest);
-      const tipMonth = tipMonthRow ? tipMonthRow.n : Math.min(plan.rows.length, effectiveTippingYear * plan.periodsPerYear);
-      milestones.push({
-        key: 'tipping',
-        title: 'Tipping Point',
-        pillClass: 'milestone-pill-tipping',
-        badgeClass: 'milestone-tipping',
-        icon: '⚖',
-        year: effectiveTippingYear,
-        monthIndex: tipMonth,
-        dateStr: formatMonthYear(yTip.endDate, c),
-        mainMetric: 'Principal > Interest',
-        subMetric: `${money(yTip.principal)} vs ${money(yTip.interest)}`,
-        descText:
-          effectiveTippingYear === 1
-            ? 'From Day 1, scheduled payments build more equity than bank interest.'
-            : 'Equity inflection point: payments build equity faster than bank interest.',
-        badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>',
-        pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
-        dividerDetail: `Principal overtakes interest · ${money(yTip.principal)} vs ${money(yTip.interest)}`
-      });
+    if (tippingYear > 0) {
+      const yTip = a.years.find((y) => y.year === tippingYear);
+      if (yTip) {
+        const startRowOfTipYear = (tippingYear - 1) * plan.periodsPerYear + 1;
+        const tipMonthRow =
+          plan.rows.find((r) => r.n >= startRowOfTipYear && r.principal + r.extra >= r.interest) ||
+          plan.rows.find((r) => r.principal + r.extra >= r.interest);
+        const tipMonth = tipMonthRow
+          ? tipMonthRow.n
+          : Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
+        const yTipPrincipal = round2(yTip.principal + yTip.extra);
+        milestones.push({
+          key: 'tipping',
+          title: 'Tipping Point',
+          pillClass: 'milestone-pill-tipping',
+          badgeClass: 'milestone-tipping',
+          icon: '⚖',
+          year: tippingYear,
+          monthIndex: tipMonth,
+          dateStr: formatMonthYear(yTip.endDate, c),
+          mainMetric: 'Principal > Interest',
+          subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
+          descText:
+            tippingYear === 1
+              ? 'From Day 1, your payments build more equity than bank interest.'
+              : 'Equity inflection point: payments build equity faster than bank interest.',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping Point ⚖</span>',
+          pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
+          dividerDetail: `Principal overtakes interest · ${money(yTipPrincipal)} vs ${money(yTip.interest)}`
+        });
+      }
     }
 
     // 3. 50% Equity
@@ -590,6 +603,7 @@ const render = () => {
     const yLast = a.years[a.years.length - 1];
     if (yLast) {
       const savedInfo = a.hasStrategy && a.interestSaved > 0 ? ` (saved ${money(a.interestSaved)})` : '';
+      const zeroMoney = money(0);
       milestones.push({
         key: 'free',
         title: 'Mortgage-Free',
@@ -599,12 +613,12 @@ const render = () => {
         year: yLast.year,
         monthIndex: plan.rows.length,
         dateStr: formatMonthYear(plan.payoffDate, c),
-        mainMetric: '$0 Balance',
+        mainMetric: `${zeroMoney} Balance`,
         subMetric: '100% Home equity',
         descText: `Loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}${savedInfo}. Full debt freedom.`,
         badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
         pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>',
-        dividerDetail: '100% Debt-Free · $0 Balance · Fully Owned'
+        dividerDetail: `100% Debt-Free · ${zeroMoney} Balance · Fully Owned`
       });
     }
   }
@@ -615,7 +629,10 @@ const render = () => {
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
         .map((r) => {
-          const m = r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short' });
+          const m =
+            plan.periodsPerYear > 12
+              ? r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short', day: 'numeric' })
+              : r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short' });
           const y = r.date.getFullYear();
           const y2 = String(y).slice(-2);
           const matchedMilestone = milestones.find((ms) => ms.monthIndex === r.n);
@@ -704,28 +721,31 @@ const downloadCsv = () => {
 };
 
 const sharePlan = () => {
+  const inp = sanitizeInputs(state);
   const url = new URL(window.location.origin + window.location.pathname);
-  url.searchParams.set('country', state.country);
-  url.searchParams.set('mode', state.mode);
-  if (state.mode === 'purchase') {
-    url.searchParams.set('price', String(state.homePrice));
-    url.searchParams.set('down', String(state.downPayment));
+  url.searchParams.set('country', inp.country);
+  url.searchParams.set('mode', inp.mode);
+  if (inp.mode === 'purchase') {
+    url.searchParams.set('price', String(inp.homePrice));
+    url.searchParams.set('down', String(inp.downPayment));
   } else {
-    url.searchParams.set('balance', String(state.currentBalance));
+    url.searchParams.set('balance', String(inp.currentBalance));
   }
-  url.searchParams.set('rate', String(state.annualRate));
-  url.searchParams.set('years', String(state.amortizationYears));
-  url.searchParams.set('freq', state.frequency);
-  url.searchParams.set('start', state.startDate);
-  if (state.extraMonthly > 0) url.searchParams.set('extra', String(state.extraMonthly));
-  if (state.annualLumpSum > 0) url.searchParams.set('lump', String(state.annualLumpSum));
-  if (state.paymentIncreaseEnabled && state.customPayment) {
-    url.searchParams.set('custom', String(state.customPayment));
+  url.searchParams.set('rate', String(inp.annualRate));
+  url.searchParams.set('years', String(inp.amortizationYears));
+  url.searchParams.set('freq', inp.frequency);
+  url.searchParams.set('start', inp.startDate);
+  if (inp.extraMonthly > 0) url.searchParams.set('extra', String(inp.extraMonthly));
+  if (inp.annualLumpSum > 0) url.searchParams.set('lump', String(inp.annualLumpSum));
+  if (inp.paymentIncreaseEnabled && inp.customPayment) {
+    url.searchParams.set('custom', String(inp.customPayment));
   }
-  if (state.propertyTaxYearly > 0) url.searchParams.set('tax', String(state.propertyTaxYearly));
-  if (state.homeInsuranceYearly > 0) url.searchParams.set('ins', String(state.homeInsuranceYearly));
-  if (state.feesMonthly > 0) url.searchParams.set('fees', String(state.feesMonthly));
-  if (state.pmiRate > 0) url.searchParams.set('pmi', String(state.pmiRate));
+  if (inp.propertyTaxYearly > 0) url.searchParams.set('tax', String(inp.propertyTaxYearly));
+  if (inp.homeInsuranceYearly > 0) url.searchParams.set('ins', String(inp.homeInsuranceYearly));
+  if (inp.feesMonthly > 0) url.searchParams.set('fees', String(inp.feesMonthly));
+  if ((inp.country === 'US' && inp.mode === 'purchase') || inp.pmiRate !== DEFAULT_INPUTS.pmiRate) {
+    url.searchParams.set('pmi', String(inp.pmiRate));
+  }
 
   // Copy to clipboard
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -765,12 +785,18 @@ const bind = () => {
   });
 
   // Down payment percentage input
-  $<HTMLInputElement>('in-down-pct').addEventListener('input', (e) => {
+  const downPctInput = $<HTMLInputElement>('in-down-pct');
+  downPctInput.addEventListener('input', (e) => {
     const pct = parseFloat((e.target as HTMLInputElement).value);
     const down = Math.round((state.homePrice * (Number.isFinite(pct) ? pct : 0)) / 100);
     update({ downPayment: down });
     setField($<HTMLInputElement>('in-down'), String(down));
     syncDownPct();
+  });
+  downPctInput.addEventListener('blur', () => {
+    state = sanitizeInputs(state);
+    syncForm();
+    render();
   });
 
   // Down payment preset micro-pills
@@ -945,15 +971,6 @@ window.addEventListener('DOMContentLoaded', () => {
   syncForm();
   bind();
   render();
-});
-
-let lastIsMobile = typeof window !== 'undefined' ? window.innerWidth <= 640 : false;
-window.addEventListener('resize', () => {
-  const isMobile = window.innerWidth <= 640;
-  if (isMobile !== lastIsMobile) {
-    lastIsMobile = isMobile;
-    render();
-  }
 });
 
 // Crisp vector print redraw

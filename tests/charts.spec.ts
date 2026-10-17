@@ -31,6 +31,8 @@ describe('Chart Utilities', () => {
     it('formats values in k and M', () => {
       expect(formatCompactMoney(0, 'CA')).toBe('$0');
       expect(formatCompactMoney(20_000, 'CA')).toBe('$20k');
+      expect(formatCompactMoney(10_010, 'CA')).toBe('$10k');
+      expect(formatCompactMoney(999_950, 'CA')).toBe('$1M');
       expect(formatCompactMoney(200_000, 'US')).toBe('$200k');
       expect(formatCompactMoney(1_000_000, 'CA')).toBe('$1M');
       expect(formatCompactMoney(1_500_000, 'UK')).toBe('£1.5M');

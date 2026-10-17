@@ -228,14 +228,18 @@ export class MortgageChartsManager {
       this.drawEmptyState(ctx, dims, 'Enter a loan to see this chart.');
       return;
     }
-    container?.classList.toggle('clickable', chart.isClickable(this.currentAnalysis, this.insightData));
+    const hoverIdx = this.insightHover[chart.id] ?? null;
+    const isActionable =
+      chart.isClickable(this.currentAnalysis, this.insightData) &&
+      (!chart.apply || hoverIdx === null || chart.apply(hoverIdx, this.currentAnalysis, this.insightData) !== null);
+    container?.classList.toggle('clickable', isActionable);
     chart.draw({
       ctx,
       dims,
       a: this.currentAnalysis,
       d: this.insightData,
       colors: getThemeColors(),
-      hover: this.insightHover[chart.id] ?? null
+      hover: hoverIdx
     });
   }
 
