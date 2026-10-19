@@ -1,12 +1,12 @@
 {
-  "name": "TrueMortgage Studio v4.0",
+  "name": "TrueMortgage — Atelier Mortgage Calculator",
   "short_name": "TrueMortgage",
-  "description": "Institutional-Grade Debt Elimination Engine & Cross-Platform Financial Studio with Canadian Bank Act compounding, AU/UK offset accounts, and local AI copilot.",
+  "description": "A bespoke, private mortgage calculator. Architectural precision, amortization schedules, prepayment privileges, and real calendar savings. 100% client-side.",
   "id": "./",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#0a0f1d",
-  "theme_color": "#38bdf8",
+  "background_color": "#090b10",
+  "theme_color": "#090b10",
   "icons": [
     {
       "src": "favicon-16x16.png",

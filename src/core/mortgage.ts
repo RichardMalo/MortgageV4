@@ -274,19 +274,14 @@ export const summarizeByYear = (s: ScheduleResult): YearRow[] => {
   return years;
 };
 
-const fmtMoney = (amount: number, country: MortgageInputs['country']) => {
-  const r = REGIONS[country];
-  return new Intl.NumberFormat(r.locale, { style: 'currency', currency: r.currency, maximumFractionDigits: 0 }).format(
-    amount
-  );
-};
+import { formatMoney } from './format.js';
 
 /** Runs the whole calculation for the UI. */
 export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
   const inputs = sanitizeInputs(raw);
   const region = REGIONS[inputs.country];
   const notes: Note[] = [];
-  const money = (x: number) => fmtMoney(x, inputs.country);
+  const money = (x: number) => formatMoney(x, inputs.country);
 
   const insurance: MortgageInsurance = {
     kind: 'none',

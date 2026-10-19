@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { getNiceTicks, formatCompactMoney, getThemeColors } from '../src/charts/mortgage-charts.js';
+import {
+  formatCompactMoney,
+  getNiceTicks,
+  getThemeColors,
+  setPrintLightMode
+} from '../src/charts/mortgage-charts.js';
+import { computeInsights, INSIGHT_CHARTS } from '../src/charts/insight-charts.js';
+import { analyzeMortgage } from '../src/core/mortgage.js';
 
 describe('Chart Utilities', () => {
   describe('getNiceTicks', () => {
@@ -41,7 +48,7 @@ describe('Chart Utilities', () => {
     });
   });
 
-  describe('getThemeColors', () => {
+  describe('getThemeColors & setPrintLightMode', () => {
     it('returns a complete theme palette structure', () => {
       const colors = getThemeColors();
       expect(colors).toHaveProperty('textColor');
@@ -53,6 +60,43 @@ describe('Chart Utilities', () => {
       expect(colors).toHaveProperty('principalColor');
       expect(colors).toHaveProperty('interestColor');
       expect(colors).toHaveProperty('baselineColor');
+    });
+
+    it('forces high-contrast light mode palette when setPrintLightMode(true) is active', () => {
+      setPrintLightMode(true);
+      try {
+        const colors = getThemeColors();
+        expect(colors.isDark).toBe(false);
+        expect(colors.cardBg).toBe('#ffffff');
+        expect(colors.textColor).toBe('#0f172a');
+      } finally {
+        setPrintLightMode(false);
+      }
+    });
+  });
+
+  describe('INSIGHT_CHARTS itemCount & tooltips', () => {
+    it('provides keyboard itemCount for all 5 insight charts and warns on cap-exceeding strategies', () => {
+      const ukAnalysis = analyzeMortgage({
+        country: 'UK',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 8,
+        amortizationYears: 20,
+        frequency: 'monthly'
+      });
+      const data = computeInsights(ukAnalysis);
+
+      Object.values(INSIGHT_CHARTS).forEach((chart) => {
+        expect(chart.itemCount).toBeDefined();
+        const count = chart.itemCount!(ukAnalysis, data);
+        expect(count).toBeGreaterThan(0);
+      });
+
+      const overCapIdx = data.strategies.findIndex((s) => s.exceedsCap);
+      expect(overCapIdx).toBeGreaterThanOrEqual(0);
+      const tipHtml = INSIGHT_CHARTS.strategies.tooltip(overCapIdx, ukAnalysis, data);
+      expect(tipHtml).toContain('penalty-free limit');
     });
   });
 });

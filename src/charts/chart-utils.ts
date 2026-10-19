@@ -74,11 +74,18 @@ if (typeof CanvasRenderingContext2D !== 'undefined' && !CanvasRenderingContext2D
   };
 }
 
+let forcePrintLightMode = false;
+
+/** Explicitly forces light-theme colors when preparing canvases for print output. */
+export const setPrintLightMode = (active: boolean) => {
+  forcePrintLightMode = active;
+};
+
 export const getThemeColors = (): ChartThemeColors => {
   let isDark = false;
   if (typeof window !== 'undefined') {
     // In print mode, always produce pristine high-contrast light mode output
-    if (window.matchMedia?.('print')?.matches) {
+    if (forcePrintLightMode || window.matchMedia?.('print')?.matches) {
       isDark = false;
     } else {
       const attr = document.documentElement.getAttribute('data-theme');

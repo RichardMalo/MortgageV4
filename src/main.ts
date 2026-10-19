@@ -6,8 +6,9 @@
 import { analyzeMortgage, clamp, round2, sanitizeInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
-import { Analysis, Country, MortgageInputs, ScheduleResult } from './core/types.js';
-import { MortgageChartsManager } from './charts/mortgage-charts.js';
+import { tippingPoint } from './core/scenarios.js';
+import { Analysis, Country, MortgageInputs } from './core/types.js';
+import { MortgageChartsManager, setPrintLightMode } from './charts/mortgage-charts.js';
 
 const STORAGE_KEY = 'truemortgage:v5.1';
 const THEME_KEY = 'truemortgage:theme';
@@ -46,6 +47,12 @@ const loadFromUrl = (): Partial<MortgageInputs> | null => {
   return Object.keys(patch).length > 0 ? patch : null;
 };
 
+const clearUrlQueryIfPresent = () => {
+  if (typeof window !== 'undefined' && window.location.search) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+};
+
 const loadState = (): MortgageInputs => {
   const urlState = loadFromUrl();
   if (urlState) {
@@ -80,6 +87,7 @@ const save = () => {
 
 const update = (patch: Partial<MortgageInputs>) => {
   state = { ...state, ...patch };
+  clearUrlQueryIfPresent();
   save();
   render();
 };
@@ -117,17 +125,38 @@ const toggleTheme = () => {
 // ---------- toast notifications ----------
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
-const showToast = (message: string) => {
+const showToast = (
+  message: string,
+  options?: { actionLabel?: string; onAction?: () => void }
+) => {
   const toast = $('toast');
   if (!toast) return;
 
   clearTimeout(toastTimer);
-  toast.textContent = message;
+  const hasAction = Boolean(options?.actionLabel && options?.onAction);
+  toast.innerHTML = `<span class="toast-msg">${escapeHtml(message)}</span>`;
+  toast.classList.toggle('has-action', hasAction);
+
+  if (hasAction && options?.actionLabel && options?.onAction) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'toast-action';
+    btn.textContent = options.actionLabel;
+    btn.addEventListener('click', () => {
+      clearTimeout(toastTimer);
+      toast.hidden = true;
+      toast.classList.remove('has-action');
+      options.onAction?.();
+    });
+    toast.appendChild(btn);
+  }
+
   toast.hidden = false;
 
   toastTimer = setTimeout(() => {
     toast.hidden = true;
-  }, 2800);
+    toast.classList.remove('has-action');
+  }, hasAction ? 5200 : 2800);
 };
 
 // ---------- form sync ----------
@@ -226,10 +255,9 @@ interface MilestoneData {
   descText: string;
   badgeDesktop: string;
   pipMobile: string;
-  dividerDetail: string;
 }
 
-const scrollToMilestone = (key: string, targetYear: number, targetMonth: number) => {
+const scrollToMilestone = (_key: string, targetYear: number, targetMonth: number) => {
   const details = document.querySelector<HTMLDetailsElement>('details.schedule');
   if (details && !details.open) {
     details.open = true;
@@ -420,9 +448,17 @@ const render = () => {
   if (!chartsManager) {
     chartsManager = new MortgageChartsManager({
       onApply: (action) => {
+        const previousState = { ...state };
         update(action.patch);
         syncForm();
-        showToast(action.message);
+        showToast(action.message, {
+          actionLabel: 'Undo',
+          onAction: () => {
+            update(previousState);
+            syncForm();
+            showToast('Reverted strategy change');
+          }
+        });
       }
     });
   }
@@ -455,11 +491,25 @@ const render = () => {
         .join('') + `<div class="total"><dt>Total</dt><dd>${money(a.monthlyHousingCost)}</dd></div>`;
   }
 
-  // Schedule table (Yearly vs Monthly)
+  // Schedule table (Yearly vs Period/Monthly)
   const isMonthly = scheduleView === 'monthly';
   const table = $('schedule-table');
   if (table) {
     table.setAttribute('data-view', scheduleView);
+  }
+
+  // Update the period toggle label so it accurately reflects the selected payment frequency
+  const periodBtn = $('schedule-btn-period');
+  if (periodBtn) {
+    const periodLabel =
+      inp.frequency === 'monthly'
+        ? 'Monthly'
+        : inp.frequency === 'semi-monthly'
+          ? 'Semi-mo'
+          : inp.frequency.includes('weekly') && !inp.frequency.includes('bi')
+            ? 'Weekly'
+            : 'Bi-weekly';
+    periodBtn.textContent = periodLabel;
   }
 
   const theadRow = $('schedule-thead-row');
@@ -494,18 +544,17 @@ const render = () => {
     btn.setAttribute('aria-checked', String(active));
   });
 
-  // Calculate landmark milestone years
-  let tippingYear = -1;
+  // Calculate landmark milestone years (aligned with tippingPoint in scenarios.ts)
+  const tipInfo = tippingPoint(plan, inp.startDate);
+  const tippingYear = tipInfo.crossYear ?? -1;
   let halfEquityYear = -1;
   const initialPrincipal = a.loanAmount;
 
   if (a.years && a.years.length > 0) {
     for (const yr of a.years) {
-      if (tippingYear === -1 && yr.principal + yr.extra >= yr.interest) {
-        tippingYear = yr.year;
-      }
       if (halfEquityYear === -1 && yr.endBalance <= initialPrincipal * 0.5) {
         halfEquityYear = yr.year;
+        break;
       }
     }
   }
@@ -534,23 +583,18 @@ const render = () => {
           subMetric: 'Remaining balance',
           descText: `${pctPaid}% of loan paid down · Fixed term concludes; renew or refinance checkpoint.`,
           badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr</span>',
-          pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>',
-          dividerDetail: `5-Yr Term Renewal · Balance: ${money(y5.endBalance)} (${pctPaid}% paid)`
+          pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>'
         });
       }
     }
 
-    // 2. Tipping Point
+    // 2. Tipping Point (unified with Tipping Point chart & exact payment row date)
     if (tippingYear > 0) {
       const yTip = a.years.find((y) => y.year === tippingYear);
       if (yTip) {
-        const startRowOfTipYear = (tippingYear - 1) * plan.periodsPerYear + 1;
-        const tipMonthRow =
-          plan.rows.find((r) => r.n >= startRowOfTipYear && r.principal + r.extra >= r.interest) ||
-          plan.rows.find((r) => r.principal + r.extra >= r.interest);
-        const tipMonth = tipMonthRow
-          ? tipMonthRow.n
-          : Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
+        const tipMonth =
+          tipInfo.crossRowIndex ?? Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
+        const tipDate = tipInfo.crossDate ?? yTip.endDate;
         const yTipPrincipal = round2(yTip.principal + yTip.extra);
         milestones.push({
           key: 'tipping',
@@ -560,7 +604,7 @@ const render = () => {
           icon: '⚖',
           year: tippingYear,
           monthIndex: tipMonth,
-          dateStr: formatMonthYear(yTip.endDate, c),
+          dateStr: formatMonthYear(tipDate, c),
           mainMetric: 'Principal > Interest',
           subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
           descText:
@@ -568,18 +612,19 @@ const render = () => {
               ? 'From Day 1, your payments build more equity than bank interest.'
               : 'Equity inflection point: payments build equity faster than bank interest.',
           badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
-          pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>',
-          dividerDetail: `Principal overtakes interest · ${money(yTipPrincipal)} vs ${money(yTip.interest)}`
+          pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
         });
       }
     }
 
-    // 3. 50% Equity
+    // 3. 50% Equity (displays exact payment date when balance crosses 50%)
     if (halfEquityYear > 0) {
       const yHalf = a.years.find((y) => y.year === halfEquityYear) || a.years[a.years.length - 1];
       if (yHalf) {
         const halfMonthRow = plan.rows.find((r) => r.balance <= initialPrincipal * 0.5);
         const halfMonth = halfMonthRow ? halfMonthRow.n : Math.min(plan.rows.length, halfEquityYear * plan.periodsPerYear);
+        const halfDate = halfMonthRow ? halfMonthRow.date : yHalf.endDate;
+        const halfBalance = halfMonthRow ? halfMonthRow.balance : yHalf.endBalance;
         milestones.push({
           key: 'half',
           title: '50% Equity',
@@ -588,13 +633,12 @@ const render = () => {
           icon: '½',
           year: halfEquityYear,
           monthIndex: halfMonth,
-          dateStr: formatMonthYear(yHalf.endDate, c),
-          mainMetric: money(yHalf.endBalance),
+          dateStr: formatMonthYear(halfDate, c),
+          mainMetric: money(halfBalance),
           subMetric: '50% loan cleared',
-          descText: `Halfway mark · Balance halved to ${money(yHalf.endBalance)} as payoff accelerates.`,
+          descText: `Halfway mark · Balance halved to ${money(halfBalance)} as payoff accelerates.`,
           badgeDesktop: '<span class="milestone-badge milestone-half">50%</span>',
-          pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>',
-          dividerDetail: `50% Equity Landmark · Balance: ${money(yHalf.endBalance)}`
+          pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>'
         });
       }
     }
@@ -617,8 +661,7 @@ const render = () => {
         subMetric: '100% Home equity',
         descText: `Loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}${savedInfo}. Full debt freedom.`,
         badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
-        pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>',
-        dividerDetail: `100% Debt-Free · ${zeroMoney} Balance · Fully Owned`
+        pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>'
       });
     }
   }
@@ -908,18 +951,34 @@ const bind = () => {
 
   // Reset
   $('btn-reset').addEventListener('click', () => {
+    const previousState = { ...state };
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };
+    clearUrlQueryIfPresent();
     save();
     syncForm();
     render();
-    showToast('Parameters reset to default');
+    showToast('Parameters reset to default', {
+      actionLabel: 'Undo',
+      onAction: () => {
+        update(previousState);
+        syncForm();
+        showToast('Restored previous parameters');
+      }
+    });
   });
+
+  // Header & table print helper (forces high-contrast light mode on canvases)
+  const triggerPrint = () => {
+    setPrintLightMode(true);
+    chartsManager?.drawAll();
+    window.print();
+  };
 
   // Header actions
   $('btn-share')?.addEventListener('click', sharePlan);
   $('btn-theme')?.addEventListener('click', toggleTheme);
-  $('btn-print')?.addEventListener('click', () => window.print());
-  $('btn-print-table')?.addEventListener('click', () => window.print());
+  $('btn-print')?.addEventListener('click', triggerPrint);
+  $('btn-print-table')?.addEventListener('click', triggerPrint);
   $('btn-csv')?.addEventListener('click', downloadCsv);
   // Milestone Showcase navigation
   const showcase = $('milestones-showcase');
@@ -955,11 +1014,13 @@ window.addEventListener('DOMContentLoaded', () => {
   render();
 });
 
-// Crisp vector print redraw
+// Crisp vector print redraw in high-contrast light mode
 window.addEventListener('beforeprint', () => {
+  setPrintLightMode(true);
   chartsManager?.drawAll();
 });
 
 window.addEventListener('afterprint', () => {
+  setPrintLightMode(false);
   chartsManager?.drawAll();
 });

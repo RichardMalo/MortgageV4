@@ -27,13 +27,12 @@ Designed with a **Prada-grade minimalist luxury aesthetic** and zero external UI
   - **½ 50% Equity Landmark**: The exact date when the original loan balance is cut in half, marking accelerated equity momentum.
   - **★ Mortgage-Free Destiny**: Final payoff date, $0.00 balance, total interest paid, and cumulative interest saved.
 - **Interactive Tap-to-Locate**: Clicking or tapping any milestone card smoothly scrolls the schedule table directly to that landmark year/month and illuminates the row with a transient luxury halo glow (`milestone-row-highlight`).
-- **Responsive Dual Presentation**: Expands into an executive 4-column runway gallery on desktop and collapses into a silky-smooth, horizontal swipeable ribbon with scroll-snapping and peek indicators on mobile screens.
+- **Responsive Dual Presentation**: Expands into an executive 4-column runway gallery on desktop and arranges into a compact, zero-scroll 2×2 grid on mobile screens.
 
 ### 📱 Flawless Mobile Schedule Optimization
-- **Zero Horizontal Overflow**: The 5-column annual schedule (`Year`, `Interest`, `Principal`, `Extra`, `Balance`) fits comfortably on small phone screens (320px–390px) without horizontal scrolling or number clipping.
-- **Full-Width Editorial Divider Banners**: Milestone announcements span all 5 columns (`colspan="5"`) right above the landmark row, delivering rich context without bloating numeric table columns.
-- **Micro-Jewel Pips & Left Accents**: Compact indicator pips (`↺`, `⚖`, `½`, `★`) and signature left-border jewel accents (sapphire, emerald, amber, mint) highlight milestone rows cleanly.
-- **Responsive Date Typography**: Automatically locks full 4-digit years (`Nov 2026`) on desktop and compact short years (`Nov '26`) on mobile with both inline style guards and high-specificity stylesheet rules.
+- **Zero Horizontal Overflow**: The 5-column annual schedule (`Year`, `Interest`, `Principal`, `Extra`, `Balance`) and 7-column payment schedule fit comfortably on phone screens without horizontal scrolling.
+- **Micro-Jewel Pips & Left Accents**: Compact indicator pips (`↺`, `⚖`, `½`, `★`), desktop milestone badges, and signature left-border jewel accents (sapphire, emerald, amber, mint) highlight milestone rows cleanly.
+- **Responsive Date Typography**: Automatically locks full 4-digit years (`Nov 2026`) on desktop and compact short years (`Nov '26`) on mobile with high-specificity stylesheet rules.
 
 ### ⚡ Prepayment Privilege Suite (TD Payment Increase & RBC Double-Up)
 - **Payment Increase Privilege**: Interactive toggle and custom payment input to simulate lender-specific annual payment increase privileges.

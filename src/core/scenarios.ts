@@ -10,7 +10,7 @@
 import { Analysis, MortgageInputs, ScheduleResult } from './types.js';
 import { buildSchedule, cappedPrepaymentPerYear, parseDate, paymentDate, round2, ScheduleParams } from './mortgage.js';
 import { REGIONS } from './regions.js';
-import { isoDate } from './format.js';
+import { formatMoney, isoDate } from './format.js';
 
 type BaseParams = Omit<ScheduleParams, 'frequency'>;
 
@@ -70,7 +70,7 @@ export interface ExtraSweep {
 const toPoint = (a: Analysis, extraMonthly: number, s: ScheduleResult): SweepPoint => ({
   extraMonthly,
   interestSaved: round2(Math.max(0, a.baseline.totalInterest - s.totalInterest)),
-  monthsSaved: Math.max(0, a.baseline.numPayments - scheduleMonths(s)),
+  monthsSaved: Math.max(0, Math.round(a.baseline.numPayments - scheduleMonths(s))),
   totalInterest: s.totalInterest,
   totalPrepaid: totalPrepaid(s),
   payoffDate: s.payoffDate
@@ -139,6 +139,8 @@ export interface Strategy {
   /** Form changes that adopt this strategy (null for the user's current plan). */
   patch: Partial<MortgageInputs> | null;
   isCurrent: boolean;
+  /** True when this strategy's annual prepayments exceed the region's typical penalty-free cap. */
+  exceedsCap: boolean;
 }
 
 const RESET_STRATEGY: Partial<MortgageInputs> = {
@@ -153,12 +155,9 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
   if (!hasLoan(a)) return [];
   const base = baseParams(a);
   const monthlyBase = a.baseline.regularPayment;
-  const money = (x: number) =>
-    new Intl.NumberFormat(REGIONS[a.inputs.country].locale, {
-      style: 'currency',
-      currency: REGIONS[a.inputs.country].currency,
-      maximumFractionDigits: 0
-    }).format(x);
+  const region = REGIONS[a.inputs.country];
+  const capLimit = region.prepaymentCap ? a.loanAmount * region.prepaymentCap : null;
+  const money = (x: number) => formatMoney(x, a.inputs.country);
 
   const build = (
     id: string,
@@ -166,6 +165,7 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     detail: string,
     s: ScheduleResult,
     extraPerYear: number,
+    cappedYearly: number,
     patch: Partial<MortgageInputs> | null,
     isCurrent = false
   ): Strategy => {
@@ -177,13 +177,14 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
       label,
       detail,
       interestSaved,
-      monthsSaved: Math.max(0, a.baseline.numPayments - months),
+      monthsSaved: Math.max(0, Math.round(a.baseline.numPayments - months)),
       extraPerYear: round2(Math.max(0, extraPerYear)),
       payoffDate: s.payoffDate,
       // Undefined (0) when the strategy costs no extra cash, e.g. regular bi-weekly.
       perDollar: committed >= 1 ? interestSaved / committed : 0,
       patch,
-      isCurrent
+      isCurrent,
+      exceedsCap: capLimit !== null && cappedYearly > capLimit + 0.5
     };
   };
 
@@ -198,6 +199,7 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
       `${money(accel.regularPayment)} every 2 weeks`,
       accel,
       accel.regularPayment * 26 - monthlyBase * 12,
+      0,
       { ...RESET_STRATEGY, frequency: 'accelerated-bi-weekly' }
     )
   );
@@ -211,8 +213,9 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
   for (const [id, label, pct] of increases) {
     const inc = round2(monthlyBase * pct);
     const s = buildSchedule({ ...base, frequency: 'monthly', paymentIncrease: inc });
+    const capped = cappedPrepaymentPerYear(a.inputs.country, 0, 0, inc, 12);
     list.push(
-      build(id, label, `${money(monthlyBase + inc)}/mo (+${money(inc)})`, s, inc * 12, {
+      build(id, label, `${money(monthlyBase + inc)}/mo (+${money(inc)})`, s, inc * 12, capped, {
         ...RESET_STRATEGY,
         paymentIncreaseEnabled: true,
         customPayment: round2(monthlyBase + inc)
@@ -223,8 +226,9 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
   // Flat extra per month.
   for (const extra of [100, 250]) {
     const s = buildSchedule({ ...base, frequency: 'monthly', extraMonthly: extra });
+    const capped = cappedPrepaymentPerYear(a.inputs.country, extra, 0, 0, 12);
     list.push(
-      build(`extra-${extra}`, `+${money(extra)}/mo extra`, `${money(extra)} extra each month`, s, extra * 12, {
+      build(`extra-${extra}`, `+${money(extra)}/mo extra`, `${money(extra)} extra each month`, s, extra * 12, capped, {
         ...RESET_STRATEGY,
         extraMonthly: extra
       })
@@ -234,8 +238,9 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
   // Yearly lump sum (~2% of the loan, rounded to 500).
   const lump = Math.max(1000, Math.round((a.loanAmount * 0.02) / 500) * 500);
   const lumpSched = buildSchedule({ ...base, frequency: 'monthly', annualLumpSum: lump });
+  const lumpCapped = cappedPrepaymentPerYear(a.inputs.country, 0, lump, 0, 12);
   list.push(
-    build('lump', `${money(lump)} yearly lump sum`, `${money(lump)} once a year`, lumpSched, lump, {
+    build('lump', `${money(lump)} yearly lump sum`, `${money(lump)} once a year`, lumpSched, lump, lumpCapped, {
       ...RESET_STRATEGY,
       annualLumpSum: lump
     })
@@ -246,7 +251,16 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     const perYear = a.plan.periodsPerYear;
     const extraPerYear =
       a.plan.regularPayment * perYear + a.inputs.extraMonthly * 12 + a.inputs.annualLumpSum - monthlyBase * 12;
-    list.push(build('current', 'Your current plan', 'What you entered above', a.plan, extraPerYear, null, true));
+    const currentCapped = cappedPrepaymentPerYear(
+      a.inputs.country,
+      a.inputs.extraMonthly,
+      a.inputs.annualLumpSum,
+      a.paymentIncrease,
+      perYear
+    );
+    list.push(
+      build('current', 'Your current plan', 'What you entered above', a.plan, extraPerYear, currentCapped, null, true)
+    );
   }
 
   return list.sort((x, y) => y.interestSaved - x.interestSaved);
@@ -306,6 +320,10 @@ export interface TippingPoint {
   /** Elapsed years when principal first matches interest (null = never). */
   crossYears: number | null;
   crossDate: Date | null;
+  /** 1-based loan year when annual principal+extra first matches interest. */
+  crossYear: number | null;
+  /** 1-based payment row number (n) of the tipping point payment. */
+  crossRowIndex: number | null;
 }
 
 export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint => {
@@ -326,10 +344,15 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
   });
 
   let crossYears: number | null = null;
+  let crossYear: number | null = null;
+  let crossRowIndex: number | null = null;
+  let crossDate: Date | null = null;
+
   for (let i = 0; i < series.length; i++) {
     const cur = series[i]!;
     const diff = cur.principal - cur.interest;
     if (diff >= 0) {
+      crossYear = i + 1;
       if (i === 0) {
         crossYears = 0;
       } else {
@@ -338,16 +361,20 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
         const t = prevDiff === diff ? 0 : -prevDiff / (diff - prevDiff);
         crossYears = prev.x + t * (cur.x - prev.x);
       }
+      const startRowOfTipYear = i * perYear + 1;
+      const tipRow =
+        s.rows.find((r) => r.n >= startRowOfTipYear && r.principal + r.extra >= r.interest) ||
+        s.rows.find((r) => r.principal + r.extra >= r.interest) ||
+        s.rows[Math.min(s.rows.length - 1, (i + 1) * perYear - 1)];
+      crossRowIndex = tipRow ? tipRow.n : Math.min(s.rows.length, (i + 1) * perYear);
+      crossDate = tipRow
+        ? tipRow.date
+        : paymentDate(parseDate(startDate), Math.max(1, Math.round(crossYears * 12)), 'monthly');
       break;
     }
   }
 
-  // After `t` elapsed years, the latest payment made is payment #(12t).
-  const crossDate =
-    crossYears === null
-      ? null
-      : paymentDate(parseDate(startDate), Math.max(1, Math.round(crossYears * 12)), 'monthly');
-  return { series, crossYears, crossDate };
+  return { series, crossYears, crossDate, crossYear, crossRowIndex };
 };
 
 // ---------------------------------------------------------------------------
@@ -419,7 +446,7 @@ export const costOfWaiting = (
     out.push({
       delayYears: d,
       interestSaved: round2(Math.max(0, a.baseline.totalInterest - totalInterest)),
-      monthsSaved: Math.max(0, a.baseline.numPayments - months),
+      monthsSaved: Math.max(0, Math.round(a.baseline.numPayments - months)),
       lostSavings: 0
     });
   }

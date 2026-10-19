@@ -110,6 +110,8 @@ export interface InsightChart {
   caption(a: Analysis, d: InsightData): string;
   /** Whether clicking the chart changes the user's plan. */
   isClickable(a: Analysis, d: InsightData): boolean;
+  /** Number of discrete hoverable/selectable points for keyboard navigation. */
+  itemCount?(a: Analysis, d: InsightData): number;
   apply?(i: number, a: Analysis, d: InsightData): ApplyAction | null;
 }
 
@@ -298,7 +300,8 @@ export const keptChart: InsightChart = {
     )} stays in your pocket instead of going to the bank.`;
   },
 
-  isClickable: () => false
+  isClickable: () => false,
+  itemCount: () => KEPT_SAMPLES + 1
 };
 
 // ---------------------------------------------------------------------------
@@ -446,7 +449,8 @@ export const tippingChart: InsightChart = {
     return `Until ${b(monthYear(a, p.crossDate))}, most of each payment goes to interest. Extra payments pull this tipping point closer.`;
   },
 
-  isClickable: () => false
+  isClickable: () => false,
+  itemCount: (a, d) => Math.max(d.planTip.series.length, a.hasStrategy ? d.baseTip.series.length : 0, 1)
 };
 
 // ---------------------------------------------------------------------------
@@ -623,6 +627,7 @@ export const extraChart: InsightChart = {
   },
 
   isClickable: (_a, d) => d.sweep !== null,
+  itemCount: (_a, d) => (d.sweep ? d.sweep.points.length : 0),
 
   apply(i, a, d) {
     const p = d.sweep?.points[i];
@@ -657,11 +662,12 @@ export const strategiesChart: InsightChart = {
     }
     const rowH = stratRowH(dims, list.length);
     const maxSaved = Math.max(1, ...list.map((s) => s.interestSaved));
-    const candidates = list.filter((s) => !s.isCurrent && s.perDollar > 0);
+    const candidates = list.filter((s) => !s.isCurrent && !s.exceedsCap && s.perDollar > 0);
+    const fallbackCandidates = list.filter((s) => !s.isCurrent && s.perDollar > 0);
+    const pool = candidates.length > 0 ? candidates : fallbackCandidates;
     const bestValue =
-      candidates.length > 0
-        ? candidates.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), candidates[0]!)
-        : null;
+      pool.length > 0 ? pool.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), pool[0]!) : null;
+    const topPenaltyFree = list.find((s) => !s.exceedsCap) ?? list[0]!;
     const wide = dims.width > 460;
 
     list.forEach((s, i) => {
@@ -700,8 +706,9 @@ export const strategiesChart: InsightChart = {
         tagX += w + 6;
       };
       if (wide) {
-        if (i === 0) tag('Most savings', colors.extraColor);
+        if (s === topPenaltyFree) tag('Most savings', colors.extraColor);
         if (bestValue && s === bestValue) tag('Best value', colors.warnColor);
+        if (s.exceedsCap) tag('Over cap', colors.warnColor);
       }
 
       // Value (right)
@@ -749,6 +756,11 @@ export const strategiesChart: InsightChart = {
   tooltip(i, a, d) {
     const s = d.strategies[i];
     if (!s) return '';
+    const ctaText = s.isCurrent
+      ? 'This is your current plan'
+      : a.hasStrategy
+        ? 'Click to switch strategy (replaces current extras)'
+        : 'Click to apply this strategy';
     return `
       <div class="tip-header">${s.label}</div>
       <div class="tip-row muted"><span>${s.detail}</span></div>
@@ -758,18 +770,19 @@ export const strategiesChart: InsightChart = {
       <div class="tip-row muted"><span>Extra cash per year:</span> <strong>${money(a, s.extraPerYear)}</strong></div>
       <div class="tip-row muted"><span>Debt-free:</span> <strong>${monthYear(a, s.payoffDate)}</strong></div>
       ${s.perDollar > 0 ? `<div class="tip-row muted"><span>Saved per ${money(a, 1)} extra:</span> <strong>${formatMoney(s.perDollar, a.inputs.country, true)}</strong></div>` : ''}
-      ${s.isCurrent ? tipCta('This is your current plan') : tipCta('Click to apply this strategy')}
+      ${s.exceedsCap ? `<div class="tip-row warn"><span>⚠ May exceed your lender's penalty-free limit</span></div>` : ''}
+      ${tipCta(ctaText)}
     `;
   },
 
   caption(a, d) {
     const list = d.strategies;
     if (list.length === 0) return '';
-    const top = list[0]!;
-    const candidates = list.filter((s) => !s.isCurrent && s.perDollar > 0);
-    const value = candidates.length > 0
-      ? candidates.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), candidates[0]!)
-      : null;
+    const top = list.find((s) => !s.exceedsCap) ?? list[0]!;
+    const candidates = list.filter((s) => !s.isCurrent && !s.exceedsCap && s.perDollar > 0);
+    const fallback = list.filter((s) => !s.isCurrent && s.perDollar > 0);
+    const pool = candidates.length > 0 ? candidates : fallback;
+    const value = pool.length > 0 ? pool.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), pool[0]!) : null;
     const current = list.find((s) => s.isCurrent);
     const rank = current ? list.indexOf(current) + 1 : 0;
     const valuePart = value
@@ -777,12 +790,13 @@ export const strategiesChart: InsightChart = {
           formatMoney(value.perDollar, a.inputs.country, true)
         )} saved per ${money(a, 1)}.`
       : '';
-    const lead = `${b(top.label)} saves the most (${b(money(a, top.interestSaved))}).${valuePart}`;
+    const lead = `${b(top.label)} saves the most within typical limits (${b(money(a, top.interestSaved))}).${valuePart}`;
     const yours = current ? ` Your plan ranks ${b(`#${rank} of ${list.length}`)}.` : ' Tap a bar to apply it.';
     return lead + yours;
   },
 
   isClickable: (_a, d) => d.strategies.length > 0,
+  itemCount: (_a, d) => d.strategies.length,
 
   apply(i, _a, d) {
     const s = d.strategies[i];
@@ -913,6 +927,7 @@ export const waitingChart: InsightChart = {
   },
 
   isClickable: (_a, d) => d.waitingIsExample && d.waiting.length > 0,
+  itemCount: (_a, d) => d.waiting.length,
 
   apply(i, a, d) {
     if (!d.waitingIsExample || i !== 0) return null;

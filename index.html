@@ -8,6 +8,21 @@
       name="description"
       content="A bespoke, private mortgage calculator. Architectural precision, amortization schedules, prepayment privileges, and real calendar savings. 100% client-side."
     />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="TrueMortgage — Atelier Mortgage Calculator" />
+    <meta
+      property="og:description"
+      content="A bespoke, private mortgage calculator. Architectural precision, amortization schedules, prepayment privileges, and real calendar savings. 100% client-side."
+    />
+    <meta property="og:url" content="https://richardmalo.github.io/MortgageV4/" />
+    <meta property="og:image" content="https://richardmalo.github.io/MortgageV4/assets/og-image.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TrueMortgage — Atelier Mortgage Calculator" />
+    <meta
+      name="twitter:description"
+      content="A bespoke, private mortgage calculator. Architectural precision, amortization schedules, prepayment privileges, and real calendar savings. 100% client-side."
+    />
+    <meta name="twitter:image" content="https://richardmalo.github.io/MortgageV4/assets/og-image.png" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#090b10" media="(prefers-color-scheme: dark)" />
     <meta name="theme-color" content="#f8f9fa" media="(prefers-color-scheme: light)" />
@@ -81,8 +96,8 @@
         </div>
 
         <div class="segmented" role="radiogroup" aria-label="Calculator mode">
-          <button type="button" class="seg-btn" data-mode="purchase" role="radio">Buying a home</button>
-          <button type="button" class="seg-btn" data-mode="existing" role="radio">I have a mortgage</button>
+          <button type="button" class="seg-btn active" data-mode="purchase" role="radio" aria-checked="true">Buying a home</button>
+          <button type="button" class="seg-btn" data-mode="existing" role="radio" aria-checked="false">I have a mortgage</button>
         </div>
 
         <div data-show="purchase">
@@ -325,22 +340,22 @@
             <div class="chart-title-group">
               <span class="card-title chart-active-title" id="chart-active-title">Balance over time</span>
               <div class="chart-tabs" role="tablist" aria-label="Mortgage charts">
-                <button type="button" class="chart-tab-btn active" role="tab" aria-selected="true" data-tab="0">Balance</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="1">Cash Flow</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="2">Cost of Waiting</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="3">Money Kept</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="4">Tipping Point</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="5">Extra Impact</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="6">Strategies</button>
-                <button type="button" class="chart-tab-btn" role="tab" aria-selected="false" data-tab="7">Lifetime</button>
+                <button type="button" class="chart-tab-btn active" id="chart-tab-0" role="tab" aria-selected="true" aria-controls="chart-slide-0" data-tab="0">Balance</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-1" role="tab" aria-selected="false" aria-controls="chart-slide-1" data-tab="1">Cash Flow</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-2" role="tab" aria-selected="false" aria-controls="chart-slide-2" data-tab="2">Cost of Waiting</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-3" role="tab" aria-selected="false" aria-controls="chart-slide-3" data-tab="3">Money Kept</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-4" role="tab" aria-selected="false" aria-controls="chart-slide-4" data-tab="4">Tipping Point</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-5" role="tab" aria-selected="false" aria-controls="chart-slide-5" data-tab="5">Extra Impact</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-6" role="tab" aria-selected="false" aria-controls="chart-slide-6" data-tab="6">Strategies</button>
+                <button type="button" class="chart-tab-btn" id="chart-tab-7" role="tab" aria-selected="false" aria-controls="chart-slide-7" data-tab="7">Lifetime</button>
               </div>
             </div>
             <button type="button" class="chart-expand-btn" id="chart-expand-btn" title="Enlarge chart" aria-label="Enlarge chart">+</button>
           </div>
 
-          <div class="chart-carousel-viewport" id="chart-carousel-viewport" tabindex="0" aria-label="Swipeable mortgage charts">
+          <div class="chart-carousel-viewport" id="chart-carousel-viewport" tabindex="0" aria-label="Interactive mortgage charts (use Left/Right arrows to switch charts, Up/Down arrows to inspect values, Enter to apply)">
             <!-- Slide 0: Balance Over Time -->
-            <div class="chart-slide" data-slide="0" data-chart="balance" data-title="Balance over time">
+            <div class="chart-slide" id="chart-slide-0" role="tabpanel" aria-labelledby="chart-tab-0" data-slide="0" data-chart="balance" data-title="Balance over time">
               <div id="chart-balance" class="chart-container"></div>
               <div class="legend" id="chart-legend-balance">
                 <span><i class="swatch plan"></i>Your plan</span>
@@ -349,7 +364,7 @@
             </div>
 
             <!-- Slide 1: Annual Cash Flow -->
-            <div class="chart-slide" data-slide="1" data-chart="cashflow" data-title="Annual Cash Flow">
+            <div class="chart-slide" id="chart-slide-1" role="tabpanel" aria-labelledby="chart-tab-1" data-slide="1" data-chart="cashflow" data-title="Annual Cash Flow">
               <div id="chart-cashflow" class="chart-container"></div>
               <div class="legend chart-legend-cashflow" id="chart-legend-cashflow">
                 <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
@@ -359,7 +374,7 @@
             </div>
 
             <!-- Slide 2: Cost of Waiting -->
-            <div class="chart-slide" data-slide="2" data-chart="waiting" data-title="Cost of Delaying Extra Payments">
+            <div class="chart-slide" id="chart-slide-2" role="tabpanel" aria-labelledby="chart-tab-2" data-slide="2" data-chart="waiting" data-title="Cost of Delaying Extra Payments">
               <div id="chart-waiting" class="chart-container"></div>
               <div class="legend" id="chart-legend-waiting">
                 <span><i class="swatch extra"></i>Interest saved if started</span>
@@ -368,7 +383,7 @@
             </div>
 
             <!-- Slide 3: Money Kept (Cumulative Interest Race) -->
-            <div class="chart-slide" data-slide="3" data-chart="kept" data-title="Money Kept vs Baseline">
+            <div class="chart-slide" id="chart-slide-3" role="tabpanel" aria-labelledby="chart-tab-3" data-slide="3" data-chart="kept" data-title="Money Kept vs Baseline">
               <div id="chart-kept" class="chart-container"></div>
               <div class="legend" id="chart-legend-kept">
                 <span><i class="swatch interest"></i>Cumulative interest</span>
@@ -378,7 +393,7 @@
             </div>
 
             <!-- Slide 4: Interest vs Principal Tipping Point -->
-            <div class="chart-slide" data-slide="4" data-chart="tipping" data-title="Principal vs Interest Tipping Point">
+            <div class="chart-slide" id="chart-slide-4" role="tabpanel" aria-labelledby="chart-tab-4" data-slide="4" data-chart="tipping" data-title="Principal vs Interest Tipping Point">
               <div id="chart-tipping" class="chart-container"></div>
               <div class="legend" id="chart-legend-tipping">
                 <span><i class="swatch chart-principal"></i>Principal / mo</span>
@@ -388,7 +403,7 @@
             </div>
 
             <!-- Slide 5: Extra Payment Sensitivity Curve -->
-            <div class="chart-slide" data-slide="5" data-chart="extra" data-title="Extra Payment Impact">
+            <div class="chart-slide" id="chart-slide-5" role="tabpanel" aria-labelledby="chart-tab-5" data-slide="5" data-chart="extra" data-title="Extra Payment Impact">
               <div id="chart-extra" class="chart-container clickable"></div>
               <div class="legend" id="chart-legend-extra">
                 <span><i class="swatch extra"></i>Interest saved</span>
@@ -398,7 +413,7 @@
             </div>
 
             <!-- Slide 6: Strategy Leaderboard -->
-            <div class="chart-slide" data-slide="6" data-chart="strategies" data-title="Strategy Comparison">
+            <div class="chart-slide" id="chart-slide-6" role="tabpanel" aria-labelledby="chart-tab-6" data-slide="6" data-chart="strategies" data-title="Strategy Comparison">
               <div id="chart-strategies" class="chart-container clickable"></div>
               <div class="legend" id="chart-legend-strategies">
                 <span><i class="swatch extra"></i>Interest saved</span>
@@ -408,7 +423,7 @@
             </div>
 
             <!-- Slide 7: Lifetime Breakdown -->
-            <div class="chart-slide" data-slide="7" data-chart="lifetime" data-title="Lifetime Breakdown">
+            <div class="chart-slide" id="chart-slide-7" role="tabpanel" aria-labelledby="chart-tab-7" data-slide="7" data-chart="lifetime" data-title="Lifetime Breakdown">
               <div id="chart-lifetime" class="chart-container"></div>
               <div class="legend chart-legend-breakdown" id="chart-legend-lifetime">
                 <span class="legend-item" data-cat="extra"><i class="swatch extra"></i>Extra</span>
@@ -426,7 +441,7 @@
             <button type="button" class="chart-nav-btn prev" id="chart-prev-btn" aria-label="Previous graph" title="Previous graph">
               ‹
             </button>
-            <div class="chart-dots" role="tablist" aria-label="Chart slides">
+            <div class="chart-dots" role="group" aria-label="Chart slide indicators">
               <button type="button" class="chart-dot active" data-dot="0" aria-label="Go to Balance over time" aria-current="true"></button>
               <button type="button" class="chart-dot" data-dot="1" aria-label="Go to Annual Cash Flow" aria-current="false"></button>
               <button type="button" class="chart-dot" data-dot="2" aria-label="Go to Cost of Waiting" aria-current="false"></button>
@@ -466,7 +481,7 @@
               </span>
               <div class="schedule-switch" role="radiogroup" aria-label="Schedule interval">
                 <button type="button" class="schedule-switch-btn active" data-schedule-view="yearly" role="radio" aria-checked="true">Yearly</button>
-                <button type="button" class="schedule-switch-btn" data-schedule-view="monthly" role="radio" aria-checked="false">Monthly</button>
+                <button type="button" class="schedule-switch-btn" id="schedule-btn-period" data-schedule-view="monthly" role="radio" aria-checked="false">Monthly</button>
               </div>
             </span>
           </summary>
@@ -476,10 +491,6 @@
               <div class="milestones-showcase-title">
                 <span class="milestones-eye">Mortgage Horizons</span>
                 <span class="milestones-count" id="milestones-count">4 Landmarks</span>
-              </div>
-              <div class="milestones-scroll-hint" aria-hidden="true">
-                <span class="scroll-hint-label">Swipe</span>
-                <span class="scroll-hint-arrow">→</span>
               </div>
             </div>
             <div class="milestones-showcase" id="milestones-showcase" role="region" aria-label="Key mortgage milestones"></div>

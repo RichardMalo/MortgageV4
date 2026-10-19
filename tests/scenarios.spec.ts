@@ -125,6 +125,47 @@ describe('Scenario & Decision Math Engine', () => {
       expect(current?.id).toBe('current');
       expect(current?.patch).toBeNull();
     });
+
+    it('flags strategies that exceed regional penalty-free prepayment caps (e.g., UK 10% cap)', () => {
+      const ukAnalysis = analyzeMortgage({
+        country: 'UK',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 8,
+        amortizationYears: 20,
+        frequency: 'monthly'
+      });
+      const ukList = strategyLeaderboard(ukAnalysis);
+      const doubleUp = ukList.find((s) => s.id === 'inc-100');
+      expect(doubleUp).toBeDefined();
+      // In UK at 8% over 20 years, doubling the monthly payment adds >10% of loan balance per year
+      expect(doubleUp?.exceedsCap).toBe(true);
+
+      // In US (no prepayment cap), no strategy should be flagged as exceeding cap
+      const usAnalysis = analyzeMortgage({
+        country: 'US',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 8,
+        amortizationYears: 20,
+        frequency: 'monthly'
+      });
+      const usList = strategyLeaderboard(usAnalysis);
+      expect(usList.every((s) => !s.exceedsCap)).toBe(true);
+    });
+
+    it('always produces integer monthsSaved values across sweep, strategies, and waiting', () => {
+      const sweep = extraPaymentSweep(strategyAnalysis, 10);
+      sweep?.points.forEach((p) => {
+        expect(Number.isInteger(p.monthsSaved)).toBe(true);
+      });
+      strategyLeaderboard(strategyAnalysis).forEach((s) => {
+        expect(Number.isInteger(s.monthsSaved)).toBe(true);
+      });
+      costOfWaiting(strategyAnalysis).forEach((w) => {
+        expect(Number.isInteger(w.monthsSaved)).toBe(true);
+      });
+    });
   });
 
   describe('cumulativeInterest & cumulativeAt', () => {
@@ -156,15 +197,23 @@ describe('Scenario & Decision Math Engine', () => {
   });
 
   describe('tippingPoint', () => {
-    it('detects when monthly principal exceeds interest', () => {
+    it('detects when monthly principal exceeds interest and aligns crossYear, crossRowIndex, and crossDate', () => {
       const tip = tippingPoint(defaultAnalysis.plan, defaultAnalysis.inputs.startDate);
       expect(tip.series.length).toBeGreaterThan(0);
       expect(tip.crossYears).not.toBeNull();
+      expect(tip.crossYear).not.toBeNull();
+      expect(tip.crossRowIndex).not.toBeNull();
       expect(tip.crossDate).not.toBeNull();
 
       // For standard 25y mortgage at 5%, crossover usually happens around year 8-12
       expect(tip.crossYears!).toBeGreaterThan(1);
       expect(tip.crossYears!).toBeLessThan(25);
+      expect(tip.crossYear).toBe(Math.ceil(tip.crossRowIndex! / defaultAnalysis.plan.periodsPerYear));
+
+      // crossDate should match the exact payment row date at crossRowIndex
+      const row = defaultAnalysis.plan.rows[tip.crossRowIndex! - 1];
+      expect(row).toBeDefined();
+      expect(tip.crossDate?.getTime()).toBe(row?.date.getTime());
     });
 
     it('pulls tipping point earlier with aggressive prepayment', () => {

@@ -23,15 +23,19 @@
  *  - Rich interactive tooltips, hover highlights and a one-line takeaway caption per chart
  */
 
-import { Analysis, MortgageInputs } from '../core/types.js';
+import { Analysis } from '../core/types.js';
 import { formatDuration, formatMoney, formatMonthYear } from '../core/format.js';
 import { REGIONS } from '../core/regions.js';
 import {
   ChartPadding,
+  drawEmptyState,
+  drawMoneyGrid,
+  drawYearAxis,
   formatCompactMoney,
   getNiceTicks,
   getThemeColors,
-  initHiDpiCanvas
+  initHiDpiCanvas,
+  setPrintLightMode
 } from './chart-utils.js';
 import { ApplyAction, INSIGHT_CHARTS, InsightChart, InsightData, computeInsights } from './insight-charts.js';
 
@@ -40,7 +44,8 @@ export {
   formatCompactMoney,
   getNiceTicks,
   getThemeColors,
-  initHiDpiCanvas
+  initHiDpiCanvas,
+  setPrintLightMode
 } from './chart-utils.js';
 export type { ChartThemeColors } from './chart-utils.js';
 
@@ -78,6 +83,7 @@ export class MortgageChartsManager {
 
   // Slide registry, in DOM order
   private slides: SlideDef[] = [];
+  private dirtySlides = new Set<string>();
 
   // Floating Tooltip
   private tooltipEl: HTMLElement;
@@ -97,6 +103,7 @@ export class MortgageChartsManager {
   private hoverBalancePeriod: number | null = null;
   private hoverLifetimeSegment: 'interest' | 'principal' | 'extra' | null = null;
   private hoverCashFlowYearIdx: number | null = null;
+  private hoverCashFlowCategory: 'interest' | 'principal' | 'extra' | null = null;
   private insightHover: Record<string, number | null> = {};
 
   constructor(options: ChartsManagerOptions = {}) {
@@ -181,11 +188,39 @@ export class MortgageChartsManager {
     const tippingLegend = document.getElementById('legend-tipping-baseline');
     if (tippingLegend) tippingLegend.hidden = !analysis.hasStrategy;
 
-    this.drawAll();
+    // Only rasterize the visible active slide during rapid input updates; mark off-screen slides dirty
+    const activeSlide = this.slides[this.activeIndex];
+    this.slides.forEach((s) => {
+      if (s === activeSlide) {
+        this.drawSlide(s);
+        this.dirtySlides.delete(s.id);
+      } else {
+        this.dirtySlides.add(s.id);
+      }
+    });
     this.updateCaption();
   }
 
+  private drawSlide(slide: SlideDef | undefined) {
+    if (!slide) return;
+    if (slide.id === 'balance') this.drawBalanceChart();
+    else if (slide.id === 'lifetime') this.drawLifetimeChart();
+    else if (slide.id === 'cashflow') this.drawCashFlowChart();
+    else if (slide.insight) this.drawInsight(slide);
+  }
+
+  private flushDirtySlides() {
+    if (this.dirtySlides.size === 0) return;
+    this.slides.forEach((s) => {
+      if (this.dirtySlides.has(s.id)) {
+        this.drawSlide(s);
+      }
+    });
+    this.dirtySlides.clear();
+  }
+
   public drawAll() {
+    this.dirtySlides.clear();
     this.drawBalanceChart();
     this.drawLifetimeChart();
     this.drawCashFlowChart();
@@ -225,7 +260,7 @@ export class MortgageChartsManager {
     const container = slide.canvas.parentElement;
     if (!this.hasLoan || !this.currentAnalysis || !this.insightData) {
       container?.classList.remove('clickable');
-      this.drawEmptyState(ctx, dims, 'Enter a loan to see this chart.');
+      drawEmptyState(ctx, dims, 'Enter a loan to see this chart.');
       return;
     }
     const hoverIdx = this.insightHover[chart.id] ?? null;
@@ -330,7 +365,7 @@ export class MortgageChartsManager {
           formatDuration(a.monthsSaved)
         )} sooner than paying monthly with no extras.`;
       }
-      return `On this plan you'll be mortgage-free in ${strong(when)}. Open the ${strong('Decide')} charts to find a faster path.`;
+      return `On this plan you'll be mortgage-free in ${strong(when)}. Explore the ${strong('Extra Impact')} and ${strong('Strategies')} tabs above to find a faster path.`;
     }
     if (id === 'lifetime') {
       const perDollar = a.loanAmount > 0 ? (a.loanAmount + a.plan.totalInterest) / a.loanAmount : 0;
@@ -361,7 +396,7 @@ export class MortgageChartsManager {
     ctx.clearRect(0, 0, dims.width, dims.height);
 
     if (!this.hasLoan || !this.currentAnalysis) {
-      this.drawEmptyState(ctx, dims, 'No balance to chart.');
+      drawEmptyState(ctx, dims, 'No balance to chart.');
       return;
     }
 
@@ -379,36 +414,10 @@ export class MortgageChartsManager {
     const getY = (bal: number) =>
       dims.padding.top + dims.plotHeight - (bal / maxY) * dims.plotHeight;
 
-    // Grid lines & Y ticks
+    // Grid lines & axes
     const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxY);
-    ctx.strokeStyle = colors.gridColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-
-    yTicks.forEach((v) => {
-      const y = getY(v);
-      ctx.beginPath();
-      ctx.moveTo(dims.padding.left, y);
-      ctx.lineTo(dims.padding.left + dims.plotWidth, y);
-      ctx.stroke();
-
-      ctx.fillStyle = colors.mutedColor;
-      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textAlign = 'right';
-      ctx.fillText(formatCompactMoney(v, a.inputs.country), dims.padding.left - 8, y + 4);
-    });
-    ctx.setLineDash([]);
-
-    // X-axis ticks
-    const xStep = maxYears <= 10 ? 1 : maxYears <= 20 ? 2 : 5;
-    ctx.fillStyle = colors.mutedColor;
-    ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.textAlign = 'center';
-
-    for (let t = 0; t <= maxYears + 1e-9; t += xStep) {
-      const x = getX(t);
-      ctx.fillText(t === 0 ? 'Now' : `${t}y`, x, dims.padding.top + dims.plotHeight + 20);
-    }
+    drawMoneyGrid(ctx, dims, colors, yTicks, maxY, a.inputs.country);
+    drawYearAxis(ctx, dims, colors, maxYears);
 
     // Baseline polyline (if strategy active)
     if (a.hasStrategy && a.baseline.rows.length > 0) {
@@ -522,7 +531,7 @@ export class MortgageChartsManager {
     ctx.clearRect(0, 0, dims.width, dims.height);
 
     if (!this.hasLoan || !this.currentAnalysis) {
-      this.drawEmptyState(ctx, dims, 'No loan data to breakdown.');
+      drawEmptyState(ctx, dims, 'No loan data to breakdown.');
       return;
     }
 
@@ -537,32 +546,8 @@ export class MortgageChartsManager {
     const niceTicks = getNiceTicks(Math.max(totalCost, 1), 5);
     const maxY = niceTicks[niceTicks.length - 1]!;
 
-    const getY = (val: number) =>
-      dims.padding.top + dims.plotHeight - (val / maxY) * dims.plotHeight;
-
     // Grid lines & Y ticks
-    ctx.strokeStyle = colors.gridColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-
-    niceTicks.forEach((v) => {
-      const y = getY(v);
-      ctx.beginPath();
-      ctx.moveTo(dims.padding.left, y);
-      ctx.lineTo(dims.padding.left + dims.plotWidth, y);
-      ctx.stroke();
-
-      ctx.fillStyle = colors.mutedColor;
-      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textAlign = 'right';
-      // Format with commas if wide enough, compact otherwise
-      const label =
-        dims.width > 420
-          ? formatMoney(v, a.inputs.country, false)
-          : formatCompactMoney(v, a.inputs.country);
-      ctx.fillText(label, dims.padding.left - 8, y + 4);
-    });
-    ctx.setLineDash([]);
+    drawMoneyGrid(ctx, dims, colors, niceTicks, maxY, a.inputs.country);
 
     // X-Axis Label "Total Cost" (matching user screenshot)
     const centerX = dims.padding.left + dims.plotWidth / 2;
@@ -645,7 +630,7 @@ export class MortgageChartsManager {
     ctx.clearRect(0, 0, dims.width, dims.height);
 
     if (!this.hasLoan || !this.currentAnalysis || aHasNoYears(this.currentAnalysis)) {
-      this.drawEmptyState(ctx, dims, 'No cash flow to chart.');
+      drawEmptyState(ctx, dims, 'No cash flow to chart.');
       return;
     }
 
@@ -661,31 +646,8 @@ export class MortgageChartsManager {
     const niceTicks = getNiceTicks(maxYearTotal, 5);
     const maxY = niceTicks[niceTicks.length - 1]!;
 
-    const getY = (val: number) =>
-      dims.padding.top + dims.plotHeight - (val / maxY) * dims.plotHeight;
-
     // Grid lines & Y ticks
-    ctx.strokeStyle = colors.gridColor;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-
-    niceTicks.forEach((v) => {
-      const y = getY(v);
-      ctx.beginPath();
-      ctx.moveTo(dims.padding.left, y);
-      ctx.lineTo(dims.padding.left + dims.plotWidth, y);
-      ctx.stroke();
-
-      ctx.fillStyle = colors.mutedColor;
-      ctx.font = '11px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.textAlign = 'right';
-      const label =
-        dims.width > 420
-          ? formatMoney(v, a.inputs.country, false)
-          : formatCompactMoney(v, a.inputs.country);
-      ctx.fillText(label, dims.padding.left - 8, y + 4);
-    });
-    ctx.setLineDash([]);
+    drawMoneyGrid(ctx, dims, colors, niceTicks, maxY, a.inputs.country);
 
     // X-Axis Title "Year" (matching screenshot)
     ctx.fillStyle = colors.textColor;
@@ -723,13 +685,20 @@ export class MortgageChartsManager {
         amount: number,
         baseColor: string,
         hoverColor: string,
+        segKey: 'interest' | 'principal' | 'extra',
         isTop: boolean
       ) => {
         if (amount <= 0) return;
         const segH = (amount / maxY) * dims.plotHeight;
         currentStackY -= segH;
 
-        ctx.fillStyle = isHovered ? hoverColor : baseColor;
+        const catHover = this.hoverCashFlowCategory;
+        const activeCat = catHover === segKey;
+        const dimmedCat = catHover !== null && catHover !== segKey;
+
+        ctx.save();
+        if (dimmedCat) ctx.globalAlpha = 0.35;
+        ctx.fillStyle = isHovered || activeCat ? hoverColor : baseColor;
         ctx.beginPath();
         if (isTop) {
           ctx.roundRect(barX, currentStackY, barWidth, segH, [2, 2, 0, 0]);
@@ -737,6 +706,7 @@ export class MortgageChartsManager {
           ctx.rect(barX, currentStackY, barWidth, segH);
         }
         ctx.fill();
+        ctx.restore();
       };
 
       // 1. Bottom: Interest (red)
@@ -744,15 +714,22 @@ export class MortgageChartsManager {
         yr.interest,
         colors.interestColor,
         colors.interestHover,
+        'interest',
         yr.principal <= 0 && yr.extra <= 0
       );
 
       // 2. Middle: Principal (blue)
-      drawSegment(yr.principal, colors.principalColor, colors.principalHover, yr.extra <= 0);
+      drawSegment(
+        yr.principal,
+        colors.principalColor,
+        colors.principalHover,
+        'principal',
+        yr.extra <= 0
+      );
 
       // 3. Top: Extra (green)
       if (yr.extra > 0) {
-        drawSegment(yr.extra, colors.extraColor, colors.extraHover, true);
+        drawSegment(yr.extra, colors.extraColor, colors.extraHover, 'extra', true);
       }
 
       // X-Axis Year Labels
@@ -768,18 +745,6 @@ export class MortgageChartsManager {
         ctx.fillText(yrText, centerX, dims.padding.top + dims.plotHeight + 16);
       }
     });
-  }
-
-  private drawEmptyState(
-    ctx: CanvasRenderingContext2D,
-    dims: { width: number; height: number },
-    message: string
-  ) {
-    const colors = getThemeColors();
-    ctx.fillStyle = colors.mutedColor;
-    ctx.font = '14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(message, dims.width / 2, dims.height / 2);
   }
 
   // =========================================================================
@@ -833,11 +798,7 @@ export class MortgageChartsManager {
 
     // Redraw active slide for pixel perfection
     requestAnimationFrame(() => {
-      if (!currentSlide) return;
-      if (currentSlide.id === 'balance') this.drawBalanceChart();
-      else if (currentSlide.id === 'lifetime') this.drawLifetimeChart();
-      else if (currentSlide.id === 'cashflow') this.drawCashFlowChart();
-      else if (currentSlide.insight) this.drawInsight(currentSlide);
+      if (currentSlide) this.drawSlide(currentSlide);
     });
   }
 
@@ -899,7 +860,86 @@ export class MortgageChartsManager {
     this.hoverBalancePeriod = null;
     this.hoverLifetimeSegment = null;
     this.hoverCashFlowYearIdx = null;
+    this.hoverCashFlowCategory = null;
     Object.keys(this.insightHover).forEach((k) => (this.insightHover[k] = null));
+  }
+
+  // =========================================================================
+  // Keyboard Inspection & Selection Helper (WCAG 2.1.1)
+  // =========================================================================
+  private stepKeyboardPoint(delta: number) {
+    if (!this.hasLoan || !this.currentAnalysis) return;
+    const slide = this.slides[this.activeIndex];
+    if (!slide) return;
+    const a = this.currentAnalysis;
+    const rect = slide.canvas.getBoundingClientRect();
+    const centerClientX = rect.left + rect.width / 2;
+    const topClientY = rect.top + 36;
+
+    if (slide.insight && this.insightData) {
+      const chart = slide.insight;
+      const count = chart.itemCount ? chart.itemCount(a, this.insightData) : 0;
+      if (count <= 0) return;
+      const cur = this.insightHover[chart.id];
+      const next = cur === null || cur === undefined ? (delta > 0 ? 0 : count - 1) : (cur + delta + count) % count;
+      this.insightHover[chart.id] = next;
+      this.drawInsight(slide);
+      this.showTooltip(centerClientX, topClientY, chart.tooltip(next, a, this.insightData));
+      return;
+    }
+
+    if (slide.id === 'balance') {
+      const total = a.plan.rows.length;
+      if (total === 0) return;
+      const step = Math.max(1, a.plan.periodsPerYear);
+      const cur = this.hoverBalancePeriod ?? 1;
+      const next = Math.max(1, Math.min(total, cur + delta * step));
+      this.hoverBalancePeriod = next;
+      this.drawBalanceChart();
+      const row = a.plan.rows[next - 1];
+      if (row) {
+        const c = a.inputs.country;
+        const locale = REGIONS[c]?.locale || 'en-CA';
+        const dateStr = row.date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
+        const yr = Math.ceil(row.n / a.plan.periodsPerYear);
+        this.showTooltip(
+          centerClientX,
+          topClientY,
+          `<div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
+           <div class="tip-row plan"><span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong></div>`
+        );
+      }
+      return;
+    }
+
+    if (slide.id === 'lifetime') {
+      const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+      const segments: Array<'interest' | 'principal' | 'extra'> =
+        totalExtra > 0 ? ['interest', 'principal', 'extra'] : ['interest', 'principal'];
+      const curIdx = this.hoverLifetimeSegment ? segments.indexOf(this.hoverLifetimeSegment) : -1;
+      const nextIdx = curIdx < 0 ? 0 : (curIdx + delta + segments.length) % segments.length;
+      this.hoverLifetimeSegment = segments[nextIdx]!;
+      this.drawLifetimeChart();
+      return;
+    }
+
+    if (slide.id === 'cashflow' && a.years.length > 0) {
+      const count = a.years.length;
+      const cur = this.hoverCashFlowYearIdx;
+      const next = cur === null ? (delta > 0 ? 0 : count - 1) : (cur + delta + count) % count;
+      this.hoverCashFlowYearIdx = next;
+      this.drawCashFlowChart();
+      const yr = a.years[next]!;
+      const c = a.inputs.country;
+      const totalPaid = yr.interest + yr.principal + yr.extra;
+      this.showTooltip(
+        centerClientX,
+        topClientY,
+        `<div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
+         <div class="tip-row total"><span>Total Paid:</span> <strong>${formatMoney(totalPaid, c)}</strong></div>
+         <div class="tip-row muted"><span>Balance left:</span> <strong>${formatMoney(yr.endBalance, c)}</strong></div>`
+      );
+    }
   }
 
   // =========================================================================
@@ -944,6 +984,7 @@ export class MortgageChartsManager {
     this.viewport.addEventListener(
       'scroll',
       () => {
+        this.flushDirtySlides();
         if (this.isProgrammaticScrolling) return;
         clearTimeout(this.scrollDebounceTimer);
         this.scrollDebounceTimer = setTimeout(() => {
@@ -965,6 +1006,7 @@ export class MortgageChartsManager {
     this.viewport.addEventListener(
       'touchstart',
       (e) => {
+        this.flushDirtySlides();
         if (e.touches[0]) {
           touchStartX = e.touches[0].clientX;
           touchStartY = e.touches[0].clientY;
@@ -994,7 +1036,7 @@ export class MortgageChartsManager {
       { passive: true }
     );
 
-    // 7. Keyboard Navigation (Left / Right Arrow)
+    // 7. Keyboard Navigation (Left / Right Arrow for slides; Up / Down / Enter / Escape for chart points)
     this.viewport.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowLeft' && this.activeIndex > 0) {
         e.preventDefault();
@@ -1002,6 +1044,27 @@ export class MortgageChartsManager {
       } else if (e.key === 'ArrowRight' && this.activeIndex < this.slideCount - 1) {
         e.preventDefault();
         this.setActiveIndex(this.activeIndex + 1, true);
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        this.stepKeyboardPoint(e.key === 'ArrowDown' ? 1 : -1);
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        const slide = this.slides[this.activeIndex];
+        const chart = slide?.insight;
+        if (chart?.apply && this.currentAnalysis && this.insightData) {
+          const idx = this.insightHover[chart.id];
+          if (idx !== null && idx !== undefined && chart.isClickable(this.currentAnalysis, this.insightData)) {
+            e.preventDefault();
+            const action = chart.apply(idx, this.currentAnalysis, this.insightData);
+            if (action) {
+              this.hideTooltip();
+              this.options.onApply?.(action);
+            }
+          }
+        }
+      } else if (e.key === 'Escape') {
+        this.hideTooltip();
+        const slide = this.slides[this.activeIndex];
+        if (slide) this.drawSlide(slide);
       }
     });
 
@@ -1187,6 +1250,7 @@ export class MortgageChartsManager {
       const c = a.inputs.country;
       const pct = (amt: number) =>
         totalCost > 0 ? ((amt / totalCost) * 100).toFixed(1) + '%' : '0%';
+      const prinLabel = totalExtra > 0 ? 'Scheduled principal:' : 'Principal:';
 
       const html = `
         <div class="tip-header">Lifetime Breakdown</div>
@@ -1195,7 +1259,7 @@ export class MortgageChartsManager {
           <strong>${formatMoney(totalExtra, c)} <span class="tip-pct">(${pct(totalExtra)})</span></strong>
         </div>
         <div class="tip-row principal ${this.hoverLifetimeSegment === 'principal' ? 'highlight' : ''}">
-          <span><i class="swatch chart-principal"></i>Principal:</span>
+          <span><i class="swatch chart-principal"></i>${prinLabel}</span>
           <strong>${formatMoney(regularPrincipal, c)} <span class="tip-pct">(${pct(regularPrincipal)})</span></strong>
         </div>
         <div class="tip-row interest ${this.hoverLifetimeSegment === 'interest' ? 'highlight' : ''}">
@@ -1318,6 +1382,22 @@ export class MortgageChartsManager {
         this.hideTooltip();
         this.drawCashFlowChart();
       }, 1500);
+    });
+
+    // Cash Flow Legend hover triggers
+    const legendEl = document.getElementById('chart-legend-cashflow');
+    legendEl?.querySelectorAll<HTMLElement>('.legend-item').forEach((item) => {
+      item.addEventListener('mouseenter', () => {
+        const cat = item.dataset.cat as 'extra' | 'principal' | 'interest';
+        if (cat) {
+          this.hoverCashFlowCategory = cat;
+          this.drawCashFlowChart();
+        }
+      });
+      item.addEventListener('mouseleave', () => {
+        this.hoverCashFlowCategory = null;
+        this.drawCashFlowChart();
+      });
     });
   }
 
