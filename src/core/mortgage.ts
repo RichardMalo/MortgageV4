@@ -63,7 +63,7 @@ export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => 
     downPayment: clamp(num(raw.downPayment, d.downPayment), 0, homePrice),
     currentBalance: clamp(num(raw.currentBalance, d.currentBalance), 0, 1e9),
     annualRate: clamp(num(raw.annualRate, d.annualRate), 0, 30),
-    amortizationYears: clamp(num(raw.amortizationYears, d.amortizationYears), 1, 40),
+    amortizationYears: clamp(num(raw.amortizationYears, d.amortizationYears), 0.5, 40),
     frequency,
     startDate: isValidIsoDate(raw.startDate) ? raw.startDate : defaultStartDate(),
     extraMonthly: clamp(num(raw.extraMonthly, 0), 0, 1e7),

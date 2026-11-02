@@ -381,6 +381,13 @@ describe('inputs and dates', () => {
     expect(a.plan.payoffDate!.getMonth()).toBe(11);
   });
 
+  it('supports decimal amortization years (e.g. 12.5 years)', () => {
+    const s = sanitizeInputs({ amortizationYears: 12.5 });
+    expect(s.amortizationYears).toBe(12.5);
+    const a = analyzeMortgage(base({ amortizationYears: 12.5 }));
+    expect(a.plan.numPayments).toBe(150);
+  });
+
   it('rejects Object.prototype keys for country and frequency', () => {
     const s = sanitizeInputs({
       country: 'toString' as never,
