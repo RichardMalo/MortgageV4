@@ -4,17 +4,14 @@
  * Slides are declared in index.html (`.chart-slide[data-chart]`) and resolved through a
  * small registry, so adding a chart means adding one slide + one definition:
  *
- *  Progress
- *   - balance     Balance over time (plan vs baseline, interactive scrubbing)
- *   - kept        Money Kept race (cumulative interest gap)            → insight-charts.ts
- *   - tipping     Interest vs principal tipping point                  → insight-charts.ts
- *  Decide
- *   - extra       Extra-payment sensitivity curve (click to apply)     → insight-charts.ts
- *   - strategies  Strategy leaderboard (click to apply)                → insight-charts.ts
- *   - waiting     Cost of waiting                                      → insight-charts.ts
- *  Breakdown
- *   - lifetime    Lifetime breakdown (stacked bar: Interest, Principal, Extra)
- *   - cashflow    Annual cash flow (stacked bars per calendar year)
+ *  0. balance     Balance over time (plan vs baseline, interactive scrubbing)
+ *  1. cashflow    Annual cash flow (stacked bars per loan year)
+ *  2. waiting     Cost of waiting                                      → insight-charts.ts
+ *  3. kept        Money Kept race (cumulative interest gap)            → insight-charts.ts
+ *  4. tipping     Interest vs principal tipping point                  → insight-charts.ts
+ *  5. extra       Extra-payment sensitivity curve (click to apply)     → insight-charts.ts
+ *  6. strategies  Strategy leaderboard (click to apply)                → insight-charts.ts
+ *  7. lifetime    Lifetime breakdown (stacked bar: Interest, Principal, Extra)
  *
  * Supports:
  *  - Effortless side-to-side touch swiping on mobile (in-place scroll snap)
@@ -31,11 +28,9 @@ import {
   drawEmptyState,
   drawMoneyGrid,
   drawYearAxis,
-  formatCompactMoney,
   getNiceTicks,
   getThemeColors,
-  initHiDpiCanvas,
-  setPrintLightMode
+  initHiDpiCanvas
 } from './chart-utils.js';
 import { ApplyAction, INSIGHT_CHARTS, InsightChart, InsightData, computeInsights } from './insight-charts.js';
 
@@ -798,7 +793,10 @@ export class MortgageChartsManager {
 
     // Redraw active slide for pixel perfection
     requestAnimationFrame(() => {
-      if (currentSlide) this.drawSlide(currentSlide);
+      if (currentSlide) {
+        this.drawSlide(currentSlide);
+        this.dirtySlides.delete(currentSlide.id);
+      }
     });
   }
 
@@ -920,6 +918,7 @@ export class MortgageChartsManager {
       const nextIdx = curIdx < 0 ? 0 : (curIdx + delta + segments.length) % segments.length;
       this.hoverLifetimeSegment = segments[nextIdx]!;
       this.drawLifetimeChart();
+      this.showTooltip(centerClientX, topClientY, this.buildLifetimeTooltipHtml(a));
       return;
     }
 
@@ -1106,9 +1105,11 @@ export class MortgageChartsManager {
 
       const relX = x - dims.padding.left;
       if (relX < 0 || relX > dims.plotWidth || a.plan.rows.length === 0) {
-        this.hoverBalancePeriod = null;
-        this.hideTooltip();
-        this.drawBalanceChart();
+        if (this.hoverBalancePeriod !== null) {
+          this.hoverBalancePeriod = null;
+          this.hideTooltip();
+          this.drawBalanceChart();
+        }
         return;
       }
 
@@ -1120,8 +1121,14 @@ export class MortgageChartsManager {
       const ratio = Math.max(0, Math.min(1, relX / dims.plotWidth));
       const targetYear = ratio * maxYears;
       const targetPeriod = Math.max(1, Math.round(targetYear * a.plan.periodsPerYear));
+      const nextPeriod = Math.min(a.plan.rows.length, targetPeriod);
 
-      this.hoverBalancePeriod = Math.min(a.plan.rows.length, targetPeriod);
+      if (nextPeriod === this.hoverBalancePeriod) {
+        this.showTooltip(clientX, clientY, this.tooltipEl.innerHTML);
+        return;
+      }
+
+      this.hoverBalancePeriod = nextPeriod;
       this.drawBalanceChart();
 
       const row = a.plan.rows[this.hoverBalancePeriod - 1];
@@ -1165,9 +1172,11 @@ export class MortgageChartsManager {
 
     this.canvasBalance.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
     this.canvasBalance.addEventListener('mouseleave', () => {
-      this.hoverBalancePeriod = null;
-      this.hideTooltip();
-      this.drawBalanceChart();
+      if (this.hoverBalancePeriod !== null) {
+        this.hoverBalancePeriod = null;
+        this.hideTooltip();
+        this.drawBalanceChart();
+      }
     });
 
     this.canvasBalance.addEventListener(
@@ -1179,9 +1188,11 @@ export class MortgageChartsManager {
     );
     this.canvasBalance.addEventListener('touchend', () => {
       setTimeout(() => {
-        this.hoverBalancePeriod = null;
-        this.hideTooltip();
-        this.drawBalanceChart();
+        if (this.hoverBalancePeriod !== null) {
+          this.hoverBalancePeriod = null;
+          this.hideTooltip();
+          this.drawBalanceChart();
+        }
       }, 1500);
     });
   }
@@ -1189,6 +1200,37 @@ export class MortgageChartsManager {
   // =========================================================================
   // Canvas 1: Lifetime Breakdown Interactivity
   // =========================================================================
+  private buildLifetimeTooltipHtml(a: Analysis): string {
+    const totalInterest = Math.max(0, a.plan.totalInterest);
+    const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+    const regularPrincipal = Math.max(0, a.loanAmount - totalExtra);
+    const totalCost = regularPrincipal + totalExtra + totalInterest;
+    const c = a.inputs.country;
+    const pct = (amt: number) => (totalCost > 0 ? ((amt / totalCost) * 100).toFixed(1) + '%' : '0%');
+    const prinLabel = totalExtra > 0 ? 'Scheduled principal:' : 'Principal:';
+
+    return `
+      <div class="tip-header">Lifetime Breakdown</div>
+      <div class="tip-row extra ${this.hoverLifetimeSegment === 'extra' ? 'highlight' : ''}">
+        <span><i class="swatch extra"></i>Extra:</span>
+        <strong>${formatMoney(totalExtra, c)} <span class="tip-pct">(${pct(totalExtra)})</span></strong>
+      </div>
+      <div class="tip-row principal ${this.hoverLifetimeSegment === 'principal' ? 'highlight' : ''}">
+        <span><i class="swatch chart-principal"></i>${prinLabel}</span>
+        <strong>${formatMoney(regularPrincipal, c)} <span class="tip-pct">(${pct(regularPrincipal)})</span></strong>
+      </div>
+      <div class="tip-row interest ${this.hoverLifetimeSegment === 'interest' ? 'highlight' : ''}">
+        <span><i class="swatch chart-interest"></i>Interest:</span>
+        <strong>${formatMoney(totalInterest, c)} <span class="tip-pct">(${pct(totalInterest)})</span></strong>
+      </div>
+      <div class="tip-divider"></div>
+      <div class="tip-row total">
+        <span>Total Cost:</span>
+        <strong>${formatMoney(totalCost, c)}</strong>
+      </div>
+    `;
+  }
+
   private bindLifetimeInteractivity() {
     const handleMove = (clientX: number, clientY: number) => {
       if (!this.hasLoan || !this.currentAnalysis || this.slides[this.activeIndex]?.id !== 'lifetime') return;
@@ -1213,9 +1255,11 @@ export class MortgageChartsManager {
       // Check if mouse is horizontally within bar bounds (with generous touch margin)
       const inBarX = x >= barX - 10 && x <= barX + barWidth + 10;
       if (!inBarX) {
-        this.hoverLifetimeSegment = null;
-        this.hideTooltip();
-        this.drawLifetimeChart();
+        if (this.hoverLifetimeSegment !== null) {
+          this.hoverLifetimeSegment = null;
+          this.hideTooltip();
+          this.drawLifetimeChart();
+        }
         return;
       }
 
@@ -1229,57 +1273,42 @@ export class MortgageChartsManager {
       const prinTopY = intTopY - prinH;
       const extraTopY = prinTopY - extraH;
 
+      let nextSeg: 'interest' | 'principal' | 'extra' | null = null;
       if (y >= intTopY && y <= baseY) {
-        this.hoverLifetimeSegment = 'interest';
+        nextSeg = 'interest';
       } else if (y >= prinTopY && y < intTopY) {
-        this.hoverLifetimeSegment = 'principal';
+        nextSeg = 'principal';
       } else if (y >= extraTopY && y < prinTopY && totalExtra > 0) {
-        this.hoverLifetimeSegment = 'extra';
+        nextSeg = 'extra';
       } else if (y >= extraTopY - 15 && y <= baseY + 15) {
         // Near bar: default to whichever is closest
-        this.hoverLifetimeSegment = y < prinTopY ? 'extra' : y < intTopY ? 'principal' : 'interest';
+        nextSeg = y < prinTopY && totalExtra > 0 ? 'extra' : y < intTopY ? 'principal' : 'interest';
       } else {
-        this.hoverLifetimeSegment = null;
-        this.hideTooltip();
-        this.drawLifetimeChart();
+        if (this.hoverLifetimeSegment !== null) {
+          this.hoverLifetimeSegment = null;
+          this.hideTooltip();
+          this.drawLifetimeChart();
+        }
         return;
       }
 
+      if (nextSeg === this.hoverLifetimeSegment) {
+        this.showTooltip(clientX, clientY, this.tooltipEl.innerHTML);
+        return;
+      }
+
+      this.hoverLifetimeSegment = nextSeg;
       this.drawLifetimeChart();
-
-      const c = a.inputs.country;
-      const pct = (amt: number) =>
-        totalCost > 0 ? ((amt / totalCost) * 100).toFixed(1) + '%' : '0%';
-      const prinLabel = totalExtra > 0 ? 'Scheduled principal:' : 'Principal:';
-
-      const html = `
-        <div class="tip-header">Lifetime Breakdown</div>
-        <div class="tip-row extra ${this.hoverLifetimeSegment === 'extra' ? 'highlight' : ''}">
-          <span><i class="swatch extra"></i>Extra:</span>
-          <strong>${formatMoney(totalExtra, c)} <span class="tip-pct">(${pct(totalExtra)})</span></strong>
-        </div>
-        <div class="tip-row principal ${this.hoverLifetimeSegment === 'principal' ? 'highlight' : ''}">
-          <span><i class="swatch chart-principal"></i>${prinLabel}</span>
-          <strong>${formatMoney(regularPrincipal, c)} <span class="tip-pct">(${pct(regularPrincipal)})</span></strong>
-        </div>
-        <div class="tip-row interest ${this.hoverLifetimeSegment === 'interest' ? 'highlight' : ''}">
-          <span><i class="swatch chart-interest"></i>Interest:</span>
-          <strong>${formatMoney(totalInterest, c)} <span class="tip-pct">(${pct(totalInterest)})</span></strong>
-        </div>
-        <div class="tip-divider"></div>
-        <div class="tip-row total">
-          <span>Total Cost:</span>
-          <strong>${formatMoney(totalCost, c)}</strong>
-        </div>
-      `;
-      this.showTooltip(clientX, clientY, html);
+      this.showTooltip(clientX, clientY, this.buildLifetimeTooltipHtml(a));
     };
 
     this.canvasLifetime.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
     this.canvasLifetime.addEventListener('mouseleave', () => {
-      this.hoverLifetimeSegment = null;
-      this.hideTooltip();
-      this.drawLifetimeChart();
+      if (this.hoverLifetimeSegment !== null) {
+        this.hoverLifetimeSegment = null;
+        this.hideTooltip();
+        this.drawLifetimeChart();
+      }
     });
 
     this.canvasLifetime.addEventListener(
@@ -1291,9 +1320,11 @@ export class MortgageChartsManager {
     );
     this.canvasLifetime.addEventListener('touchend', () => {
       setTimeout(() => {
-        this.hoverLifetimeSegment = null;
-        this.hideTooltip();
-        this.drawLifetimeChart();
+        if (this.hoverLifetimeSegment !== null) {
+          this.hoverLifetimeSegment = null;
+          this.hideTooltip();
+          this.drawLifetimeChart();
+        }
       }, 1500);
     });
 
@@ -1302,14 +1333,16 @@ export class MortgageChartsManager {
     legendEl?.querySelectorAll<HTMLElement>('.legend-item').forEach((item) => {
       item.addEventListener('mouseenter', () => {
         const cat = item.dataset.cat as 'extra' | 'principal' | 'interest';
-        if (cat) {
+        if (cat && this.hoverLifetimeSegment !== cat) {
           this.hoverLifetimeSegment = cat;
           this.drawLifetimeChart();
         }
       });
       item.addEventListener('mouseleave', () => {
-        this.hoverLifetimeSegment = null;
-        this.drawLifetimeChart();
+        if (this.hoverLifetimeSegment !== null) {
+          this.hoverLifetimeSegment = null;
+          this.drawLifetimeChart();
+        }
       });
     });
   }
@@ -1334,14 +1367,21 @@ export class MortgageChartsManager {
 
       const relX = x - dims.padding.left;
       if (relX < 0 || relX > dims.plotWidth || years.length === 0) {
-        this.hoverCashFlowYearIdx = null;
-        this.hideTooltip();
-        this.drawCashFlowChart();
+        if (this.hoverCashFlowYearIdx !== null) {
+          this.hoverCashFlowYearIdx = null;
+          this.hideTooltip();
+          this.drawCashFlowChart();
+        }
         return;
       }
 
       const slotWidth = dims.plotWidth / years.length;
       const idx = Math.max(0, Math.min(years.length - 1, Math.floor(relX / slotWidth)));
+
+      if (idx === this.hoverCashFlowYearIdx) {
+        this.showTooltip(clientX, clientY, this.tooltipEl.innerHTML);
+        return;
+      }
 
       this.hoverCashFlowYearIdx = idx;
       this.drawCashFlowChart();
@@ -1364,9 +1404,11 @@ export class MortgageChartsManager {
 
     this.canvasCashFlow.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));
     this.canvasCashFlow.addEventListener('mouseleave', () => {
-      this.hoverCashFlowYearIdx = null;
-      this.hideTooltip();
-      this.drawCashFlowChart();
+      if (this.hoverCashFlowYearIdx !== null) {
+        this.hoverCashFlowYearIdx = null;
+        this.hideTooltip();
+        this.drawCashFlowChart();
+      }
     });
 
     this.canvasCashFlow.addEventListener(
@@ -1378,9 +1420,11 @@ export class MortgageChartsManager {
     );
     this.canvasCashFlow.addEventListener('touchend', () => {
       setTimeout(() => {
-        this.hoverCashFlowYearIdx = null;
-        this.hideTooltip();
-        this.drawCashFlowChart();
+        if (this.hoverCashFlowYearIdx !== null) {
+          this.hoverCashFlowYearIdx = null;
+          this.hideTooltip();
+          this.drawCashFlowChart();
+        }
       }, 1500);
     });
 

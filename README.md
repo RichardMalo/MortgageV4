@@ -42,19 +42,19 @@ Designed with a **Prada-grade minimalist luxury aesthetic** and zero external UI
 ### 📊 Interactive 8-Slide Retina Chart Suite
 Zero-dependency custom Canvas charting engine with responsive touch-swipe, hover scrubbing, interactive tooltips, and plain-English takeaway captions:
 1. **Balance Over Time**: Plan vs. baseline payoff curves with interactive balance inspection.
-2. **Money Kept**: Cumulative interest race illustrating the widening green savings gap.
-3. **Tipping Point**: Month-by-month principal vs. interest crossover curve.
-4. **Extra Payment Sensitivity**: Curve of interest and years saved; click any point to set your payment.
-5. **Strategy Comparison**: Side-by-side leaderboard (Accelerated Bi-Weekly, +10%, +25%, Double-Up, Extra Monthly, Lump Sum) with 1-click apply.
-6. **Cost of Waiting**: Real dollar cost of delaying prepayments by 1, 2, 3, or 5 years.
-7. **Lifetime Breakdown**: Stacked interactive cost allocation (Principal, Interest, Extra).
-8. **Annual Cash Flow**: Year-by-year cash allocation bars.
+2. **Annual Cash Flow**: Year-by-year cash allocation bars.
+3. **Cost of Waiting**: Real dollar cost of delaying prepayments by 1, 2, 3, or 5 years.
+4. **Money Kept**: Cumulative interest race illustrating the widening green savings gap.
+5. **Tipping Point**: Month-by-month principal vs. interest crossover curve.
+6. **Extra Payment Impact**: Curve of interest and years saved; click any point to set your payment.
+7. **Strategy Comparison**: Side-by-side leaderboard (Accelerated Bi-Weekly, +10%, +25%, Double-Up, Extra Monthly, Lump Sum) with 1-click apply.
+8. **Lifetime Breakdown**: Stacked interactive cost allocation (Principal, Interest, Extra).
 - **Chart Zoom / Enlarge**: Fullscreen expansion toggle (`+` / `−`) for deep analysis on any screen size.
 
 ### 🌎 Automatic Multi-Regional Rules
 - **Canada (CA)**: Semi-annual compounding and statutory CMHC mortgage loan insurance rules with tier validations.
 - **United States (US)**: Monthly compounding and automatic Private Mortgage Insurance (PMI) cancellation at 78% LTV.
-- **United Kingdom (UK) & Australia (AU)**: Localized terminology, stamp duty / fee conventions, and currency formatting.
+- **United Kingdom (UK) & Australia (AU)**: Localized terminology (Council tax/rates, Service charge/Strata fees), UK 10% annual overpayment allowance, and currency formatting.
 
 ### 🌓 Milanese Atelier Design System
 - **Theme Switching**: Dark and Light themes with automatic system detection, manual toggle, and localStorage persistence.

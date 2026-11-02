@@ -170,7 +170,7 @@ export const formatCompactMoney = (val: number, country: Country = 'CA'): string
 };
 
 /**
- * Initializes a canvas for HiDPI/Retina screens.
+ * Initializes a canvas for HiDPI/Retina screens without reallocating backing stores when size is unchanged.
  */
 export const initHiDpiCanvas = (
   canvas: HTMLCanvasElement,
@@ -178,14 +178,20 @@ export const initHiDpiCanvas = (
   height: number
 ): CanvasRenderingContext2D | null => {
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 2 : 2;
-  canvas.width = Math.max(1, Math.round(width * dpr));
-  canvas.height = Math.max(1, Math.round(height * dpr));
-  canvas.style.width = `${width}px`;
-  canvas.style.height = `${height}px`;
+  const targetW = Math.max(1, Math.round(width * dpr));
+  const targetH = Math.max(1, Math.round(height * dpr));
+  if (canvas.width !== targetW || canvas.height !== targetH) {
+    canvas.width = targetW;
+    canvas.height = targetH;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
 
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.scale(dpr, dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.setLineDash([]);
   }
   return ctx;
 };

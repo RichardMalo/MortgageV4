@@ -7,6 +7,7 @@
 import {
   Analysis,
   Compounding,
+  Country,
   Frequency,
   MortgageInputs,
   MortgageInsurance,
@@ -23,7 +24,8 @@ import {
   DEFAULT_INPUTS,
   FREQUENCIES,
   PMI_AUTO_CANCEL_LTV,
-  REGIONS
+  REGIONS,
+  defaultStartDate
 } from './regions.js';
 
 export const round2 = (x: number): number => Math.round((x + Number.EPSILON) * 100) / 100;
@@ -45,8 +47,14 @@ const isValidIsoDate = (s: unknown): s is string => {
 /** Coerces any (possibly stale or hand-edited) input object into a valid one. */
 export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => {
   const d = DEFAULT_INPUTS;
-  const country = raw.country && raw.country in REGIONS ? raw.country : d.country;
-  const frequency = raw.frequency && raw.frequency in FREQUENCIES ? raw.frequency : d.frequency;
+  const country =
+    typeof raw.country === 'string' && Object.hasOwn(REGIONS, raw.country)
+      ? (raw.country as Country)
+      : d.country;
+  const frequency =
+    typeof raw.frequency === 'string' && Object.hasOwn(FREQUENCIES, raw.frequency)
+      ? (raw.frequency as Frequency)
+      : d.frequency;
   const homePrice = clamp(num(raw.homePrice, d.homePrice), 0, 1e9);
   return {
     country,
@@ -57,7 +65,7 @@ export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => 
     annualRate: clamp(num(raw.annualRate, d.annualRate), 0, 30),
     amortizationYears: clamp(num(raw.amortizationYears, d.amortizationYears), 1, 40),
     frequency,
-    startDate: isValidIsoDate(raw.startDate) ? raw.startDate : d.startDate,
+    startDate: isValidIsoDate(raw.startDate) ? raw.startDate : defaultStartDate(),
     extraMonthly: clamp(num(raw.extraMonthly, 0), 0, 1e7),
     annualLumpSum: clamp(num(raw.annualLumpSum, 0), 0, 1e9),
     paymentIncreaseEnabled: Boolean(raw.paymentIncreaseEnabled),
@@ -67,6 +75,69 @@ export const sanitizeInputs = (raw: Partial<MortgageInputs>): MortgageInputs => 
     feesMonthly: clamp(num(raw.feesMonthly, 0), 0, 1e7),
     pmiRate: clamp(num(raw.pmiRate, d.pmiRate), 0, 5)
   };
+};
+
+/** Parses URL query string into a partial input patch (or null when no recognized keys exist). */
+export const parseUrlInputs = (search: string): Partial<MortgageInputs> | null => {
+  if (!search) return null;
+  const p = new URLSearchParams(search);
+  const patch: Partial<MortgageInputs> = {};
+
+  if (p.has('country')) patch.country = p.get('country') as Country;
+  if (p.has('mode')) patch.mode = p.get('mode') as MortgageInputs['mode'];
+  if (p.has('price')) patch.homePrice = parseFloat(p.get('price') || '');
+  if (p.has('down')) patch.downPayment = parseFloat(p.get('down') || '');
+  if (p.has('balance')) patch.currentBalance = parseFloat(p.get('balance') || '');
+  if (p.has('rate')) patch.annualRate = parseFloat(p.get('rate') || '');
+  if (p.has('years')) patch.amortizationYears = parseFloat(p.get('years') || '');
+  if (p.has('freq')) patch.frequency = p.get('freq') as MortgageInputs['frequency'];
+  if (p.has('start')) patch.startDate = p.get('start') || undefined;
+  if (p.has('extra')) patch.extraMonthly = parseFloat(p.get('extra') || '');
+  if (p.has('lump')) patch.annualLumpSum = parseFloat(p.get('lump') || '');
+  if (p.has('custom')) {
+    patch.paymentIncreaseEnabled = true;
+    patch.customPayment = parseFloat(p.get('custom') || '');
+  }
+  if (p.has('tax')) patch.propertyTaxYearly = parseFloat(p.get('tax') || '');
+  if (p.has('ins')) patch.homeInsuranceYearly = parseFloat(p.get('ins') || '');
+  if (p.has('fees')) patch.feesMonthly = parseFloat(p.get('fees') || '');
+  if (p.has('pmi')) patch.pmiRate = parseFloat(p.get('pmi') || '');
+
+  return Object.keys(patch).length > 0 ? patch : null;
+};
+
+/** Serializes sanitized mortgage inputs into URLSearchParams for link sharing. */
+export const serializeUrlInputs = (raw: Partial<MortgageInputs>): URLSearchParams => {
+  const a = analyzeMortgage(raw);
+  const inp = a.inputs;
+  const params = new URLSearchParams();
+  params.set('country', inp.country);
+  params.set('mode', inp.mode);
+  if (inp.mode === 'purchase') {
+    params.set('price', String(inp.homePrice));
+    params.set('down', String(inp.downPayment));
+  } else {
+    params.set('balance', String(inp.currentBalance));
+  }
+  params.set('rate', String(inp.annualRate));
+  params.set('years', String(inp.amortizationYears));
+  params.set('freq', inp.frequency);
+  params.set('start', inp.startDate);
+  if (inp.extraMonthly > 0) params.set('extra', String(inp.extraMonthly));
+  if (inp.annualLumpSum > 0) params.set('lump', String(inp.annualLumpSum));
+  if (inp.paymentIncreaseEnabled && inp.customPayment) {
+    const clampedCustom = round2(clamp(inp.customPayment, a.basePayment, a.maxPayment));
+    if (clampedCustom > 0) {
+      params.set('custom', String(clampedCustom));
+    }
+  }
+  if (inp.propertyTaxYearly > 0) params.set('tax', String(inp.propertyTaxYearly));
+  if (inp.homeInsuranceYearly > 0) params.set('ins', String(inp.homeInsuranceYearly));
+  if (inp.feesMonthly > 0) params.set('fees', String(inp.feesMonthly));
+  if ((inp.country === 'US' && inp.mode === 'purchase') || inp.pmiRate !== DEFAULT_INPUTS.pmiRate) {
+    params.set('pmi', String(inp.pmiRate));
+  }
+  return params;
 };
 
 /** Interest rate per payment period, honouring the country's compounding convention. */

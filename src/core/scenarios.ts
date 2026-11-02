@@ -10,7 +10,7 @@
 import { Analysis, MortgageInputs, ScheduleResult } from './types.js';
 import { buildSchedule, cappedPrepaymentPerYear, parseDate, paymentDate, round2, ScheduleParams } from './mortgage.js';
 import { REGIONS } from './regions.js';
-import { formatMoney, isoDate } from './format.js';
+import { formatDuration, formatMoney, formatMonthYear, isoDate } from './format.js';
 
 type BaseParams = Omit<ScheduleParams, 'frequency'>;
 
@@ -454,4 +454,147 @@ export const costOfWaiting = (
   const now = out[0]?.interestSaved ?? 0;
   out.forEach((p) => (p.lostSavings = round2(Math.max(0, now - p.interestSaved))));
   return out;
+};
+
+// ---------------------------------------------------------------------------
+// 6. Mortgage Horizons Milestones
+// ---------------------------------------------------------------------------
+
+export interface MilestoneData {
+  key: 'term' | 'tipping' | 'half' | 'free';
+  title: string;
+  pillClass: string;
+  icon: string;
+  year: number;
+  monthIndex: number;
+  dateStr: string;
+  mainMetric: string;
+  subMetric: string;
+  descText: string;
+  badgeDesktop: string;
+  pipMobile: string;
+}
+
+/** Computes up to 4 landmark milestones (5-Yr Term, Tipping Point, 50% Equity, Mortgage-Free). */
+export const buildMilestones = (a: Analysis): MilestoneData[] => {
+  const { plan, inputs: inp } = a;
+  const c = inp.country;
+  const money = (x: number, cents = false) => formatMoney(x, c, cents);
+  const initialPrincipal = a.loanAmount;
+
+  if (!a.years || a.years.length <= 1 || initialPrincipal <= 0) {
+    return [];
+  }
+
+  const tipInfo = tippingPoint(plan, inp.startDate);
+  const tippingYear = tipInfo.crossYear ?? -1;
+  let halfEquityYear = -1;
+
+  for (const yr of a.years) {
+    if (halfEquityYear === -1 && yr.endBalance <= initialPrincipal * 0.5) {
+      halfEquityYear = yr.year;
+      break;
+    }
+  }
+
+  const milestones: MilestoneData[] = [];
+
+  // 1. 5-Yr Term
+  if (a.years.length > 5) {
+    const y5 = a.years.find((y) => y.year === 5);
+    if (y5) {
+      const paidDown = Math.max(0, initialPrincipal - y5.endBalance);
+      const pctPaid = Math.round((paidDown / initialPrincipal) * 100);
+      milestones.push({
+        key: 'term',
+        title: '5-Yr Term',
+        pillClass: 'milestone-pill-term',
+        icon: '↺',
+        year: 5,
+        monthIndex: Math.min(plan.rows.length, 5 * plan.periodsPerYear),
+        dateStr: formatMonthYear(y5.endDate, c),
+        mainMetric: money(y5.endBalance),
+        subMetric: 'Remaining balance',
+        descText: `${pctPaid}% of loan paid down · Fixed term concludes; renew or refinance checkpoint.`,
+        badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr</span>',
+        pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>'
+      });
+    }
+  }
+
+  // 2. Tipping Point (unified with Tipping Point chart & exact payment row date)
+  if (tippingYear > 0) {
+    const yTip = a.years.find((y) => y.year === tippingYear);
+    if (yTip) {
+      const tipMonth =
+        tipInfo.crossRowIndex ?? Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
+      const tipDate = tipInfo.crossDate ?? yTip.endDate;
+      const yTipPrincipal = round2(yTip.principal + yTip.extra);
+      milestones.push({
+        key: 'tipping',
+        title: 'Tipping Point',
+        pillClass: 'milestone-pill-tipping',
+        icon: '⚖',
+        year: tippingYear,
+        monthIndex: tipMonth,
+        dateStr: formatMonthYear(tipDate, c),
+        mainMetric: 'Principal > Interest',
+        subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
+        descText:
+          tippingYear === 1
+            ? 'From Day 1, your payments build more equity than bank interest.'
+            : 'Equity inflection point: payments build equity faster than bank interest.',
+        badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
+        pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
+      });
+    }
+  }
+
+  // 3. 50% Equity (displays exact payment date when balance crosses 50%)
+  if (halfEquityYear > 0) {
+    const yHalf = a.years.find((y) => y.year === halfEquityYear) || a.years[a.years.length - 1];
+    if (yHalf) {
+      const halfMonthRow = plan.rows.find((r) => r.balance <= initialPrincipal * 0.5);
+      const halfMonth = halfMonthRow ? halfMonthRow.n : Math.min(plan.rows.length, halfEquityYear * plan.periodsPerYear);
+      const halfDate = halfMonthRow ? halfMonthRow.date : yHalf.endDate;
+      const halfBalance = halfMonthRow ? halfMonthRow.balance : yHalf.endBalance;
+      milestones.push({
+        key: 'half',
+        title: '50% Equity',
+        pillClass: 'milestone-pill-half',
+        icon: '½',
+        year: halfEquityYear,
+        monthIndex: halfMonth,
+        dateStr: formatMonthYear(halfDate, c),
+        mainMetric: money(halfBalance),
+        subMetric: '50% loan cleared',
+        descText: `Halfway mark · Balance halved to ${money(halfBalance)} as payoff accelerates.`,
+        badgeDesktop: '<span class="milestone-badge milestone-half">50%</span>',
+        pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>'
+      });
+    }
+  }
+
+  // 4. Mortgage-Free
+  const yLast = a.years[a.years.length - 1];
+  if (yLast) {
+    const savedInfo = a.hasStrategy && a.interestSaved > 0 ? ` (saved ${money(a.interestSaved)})` : '';
+    const zeroMoney = money(0);
+    milestones.push({
+      key: 'free',
+      title: 'Mortgage-Free',
+      pillClass: 'milestone-pill-free',
+      icon: '★',
+      year: yLast.year,
+      monthIndex: plan.rows.length,
+      dateStr: formatMonthYear(plan.payoffDate, c),
+      mainMetric: `${zeroMoney} Balance`,
+      subMetric: '100% Home equity',
+      descText: `Loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}${savedInfo}. Full debt freedom.`,
+      badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
+      pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>'
+    });
+  }
+
+  return milestones;
 };

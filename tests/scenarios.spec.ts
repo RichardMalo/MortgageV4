@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeMortgage } from '../src/core/mortgage.js';
 import {
+  buildMilestones,
   costOfWaiting,
   cumulativeAt,
   cumulativeInterest,
@@ -254,6 +255,39 @@ describe('Scenario & Decision Math Engine', () => {
       expect(exampleWaiting.length).toBe(3);
       expect(exampleWaiting[0]!.interestSaved).toBeGreaterThan(0);
       expect(exampleWaiting[1]!.lostSavings).toBeGreaterThan(0);
+    });
+  });
+
+  describe('buildMilestones', () => {
+    it('returns empty array when loanAmount is 0', () => {
+      const empty = analyzeMortgage({ homePrice: 0, downPayment: 0 });
+      expect(buildMilestones(empty)).toEqual([]);
+    });
+
+    it('builds all 4 milestone landmarks for a 25-year mortgage', () => {
+      const milestones = buildMilestones(defaultAnalysis);
+      expect(milestones.map((m) => m.key)).toEqual(['term', 'tipping', 'half', 'free']);
+      for (const m of milestones) {
+        expect(m.year).toBeGreaterThan(0);
+        expect(m.monthIndex).toBeGreaterThan(0);
+        expect(m.dateStr.length).toBeGreaterThan(0);
+        expect(m.badgeDesktop.length).toBeGreaterThan(0);
+        expect(m.pipMobile.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('omits the 5-Yr Term Renewal milestone when amortization is 5 years or less', () => {
+      const shortAnalysis = analyzeMortgage({
+        country: 'CA',
+        homePrice: 300_000,
+        downPayment: 60_000,
+        annualRate: 5,
+        amortizationYears: 5,
+        frequency: 'monthly'
+      });
+      const milestones = buildMilestones(shortAnalysis);
+      expect(milestones.some((m) => m.key === 'term')).toBe(false);
+      expect(milestones.some((m) => m.key === 'free')).toBe(true);
     });
   });
 });

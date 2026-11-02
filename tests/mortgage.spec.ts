@@ -5,9 +5,11 @@ import {
   buildSchedule,
   canadianMinimumDown,
   cmhcPremiumRate,
+  parseUrlInputs,
   paymentDate,
   periodicRate,
-  sanitizeInputs
+  sanitizeInputs,
+  serializeUrlInputs
 } from '../src/core/mortgage';
 import { DEFAULT_INPUTS } from '../src/core/regions';
 import { MortgageInputs } from '../src/core/types';
@@ -377,5 +379,67 @@ describe('inputs and dates', () => {
     const a = analyzeMortgage(base({ amortizationYears: 25 }));
     expect(a.plan.payoffDate!.getFullYear()).toBe(2050);
     expect(a.plan.payoffDate!.getMonth()).toBe(11);
+  });
+
+  it('rejects Object.prototype keys for country and frequency', () => {
+    const s = sanitizeInputs({
+      country: 'toString' as never,
+      frequency: 'constructor' as never
+    });
+    expect(s.country).toBe('CA');
+    expect(s.frequency).toBe('monthly');
+  });
+
+  it('round-trips URL query parameters and clamps customPayment to [basePayment, maxPayment]', () => {
+    expect(parseUrlInputs('')).toBeNull();
+    expect(parseUrlInputs('?foo=bar')).toBeNull();
+
+    const raw = base({
+      country: 'US',
+      mode: 'purchase',
+      homePrice: 650_000,
+      downPayment: 130_000,
+      annualRate: 5.75,
+      amortizationYears: 30,
+      frequency: 'accelerated-bi-weekly',
+      extraMonthly: 250,
+      annualLumpSum: 5000,
+      paymentIncreaseEnabled: true,
+      customPayment: 999_999, // way above 2x cap
+      propertyTaxYearly: 4800,
+      homeInsuranceYearly: 1500,
+      feesMonthly: 200
+    });
+
+    const params = serializeUrlInputs(raw);
+    const parsed = parseUrlInputs(params.toString());
+    expect(parsed).not.toBeNull();
+
+    const expectedAnalysis = analyzeMortgage(raw);
+    // Serialized cp must be clamped to maxPayment (2x basePayment)
+    expect(parsed!.customPayment).toBeCloseTo(expectedAnalysis.maxPayment, 2);
+
+    const roundTrip = analyzeMortgage(parsed!);
+    expect(roundTrip.inputs.country).toBe('US');
+    expect(roundTrip.inputs.homePrice).toBe(650_000);
+    expect(roundTrip.inputs.downPayment).toBe(130_000);
+    expect(roundTrip.inputs.annualRate).toBe(5.75);
+    expect(roundTrip.inputs.amortizationYears).toBe(30);
+    expect(roundTrip.inputs.frequency).toBe('accelerated-bi-weekly');
+    expect(roundTrip.inputs.extraMonthly).toBe(250);
+    expect(roundTrip.inputs.annualLumpSum).toBe(5000);
+    expect(roundTrip.inputs.paymentIncreaseEnabled).toBe(true);
+    expect(roundTrip.plan.regularPayment).toBeCloseTo(expectedAnalysis.plan.regularPayment, 2);
+
+    // Existing mode URL serialization
+    const existingParams = serializeUrlInputs(
+      base({ mode: 'existing', currentBalance: 315_000, annualRate: 4.5, amortizationYears: 15 })
+    );
+    expect(existingParams.get('mode')).toBe('existing');
+    expect(existingParams.get('balance')).toBe('315000');
+    expect(existingParams.has('price')).toBe(false);
+    const parsedExisting = parseUrlInputs(existingParams.toString());
+    expect(parsedExisting?.mode).toBe('existing');
+    expect(parsedExisting?.currentBalance).toBe(315_000);
   });
 });

@@ -3,10 +3,10 @@
  * One form in, one analysis out. All math lives in ./core/mortgage.ts.
  */
 
-import { analyzeMortgage, clamp, round2, sanitizeInputs } from './core/mortgage.js';
+import { analyzeMortgage, clamp, parseUrlInputs, sanitizeInputs, serializeUrlInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
-import { tippingPoint } from './core/scenarios.js';
+import { MilestoneData, buildMilestones } from './core/scenarios.js';
 import { Analysis, Country, MortgageInputs } from './core/types.js';
 import { MortgageChartsManager, setPrintLightMode } from './charts/mortgage-charts.js';
 
@@ -21,30 +21,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 /** Parses URL search params into Partial<MortgageInputs> if present. */
 const loadFromUrl = (): Partial<MortgageInputs> | null => {
   if (typeof window === 'undefined' || !window.location.search) return null;
-  const p = new URLSearchParams(window.location.search);
-  const patch: Partial<MortgageInputs> = {};
-
-  if (p.has('country')) patch.country = p.get('country') as Country;
-  if (p.has('mode')) patch.mode = p.get('mode') as MortgageInputs['mode'];
-  if (p.has('price')) patch.homePrice = parseFloat(p.get('price') || '');
-  if (p.has('down')) patch.downPayment = parseFloat(p.get('down') || '');
-  if (p.has('balance')) patch.currentBalance = parseFloat(p.get('balance') || '');
-  if (p.has('rate')) patch.annualRate = parseFloat(p.get('rate') || '');
-  if (p.has('years')) patch.amortizationYears = parseFloat(p.get('years') || '');
-  if (p.has('freq')) patch.frequency = p.get('freq') as MortgageInputs['frequency'];
-  if (p.has('start')) patch.startDate = p.get('start') || undefined;
-  if (p.has('extra')) patch.extraMonthly = parseFloat(p.get('extra') || '');
-  if (p.has('lump')) patch.annualLumpSum = parseFloat(p.get('lump') || '');
-  if (p.has('custom')) {
-    patch.paymentIncreaseEnabled = true;
-    patch.customPayment = parseFloat(p.get('custom') || '');
-  }
-  if (p.has('tax')) patch.propertyTaxYearly = parseFloat(p.get('tax') || '');
-  if (p.has('ins')) patch.homeInsuranceYearly = parseFloat(p.get('ins') || '');
-  if (p.has('fees')) patch.feesMonthly = parseFloat(p.get('fees') || '');
-  if (p.has('pmi')) patch.pmiRate = parseFloat(p.get('pmi') || '');
-
-  return Object.keys(patch).length > 0 ? patch : null;
+  return parseUrlInputs(window.location.search);
 };
 
 const clearUrlQueryIfPresent = () => {
@@ -241,44 +218,33 @@ const syncVisibility = () => {
 const escapeHtml = (s: string) =>
   s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
-interface MilestoneData {
-  key: 'term' | 'tipping' | 'half' | 'free';
-  title: string;
-  pillClass: string;
-  badgeClass: string;
-  icon: string;
-  year: number;
-  monthIndex: number;
-  dateStr: string;
-  mainMetric: string;
-  subMetric: string;
-  descText: string;
-  badgeDesktop: string;
-  pipMobile: string;
-}
+let milestoneHighlightTimer: ReturnType<typeof setTimeout> | undefined;
+let highlightedRow: HTMLElement | null = null;
 
-const scrollToMilestone = (_key: string, targetYear: number, targetMonth: number) => {
+const scrollToMilestone = (targetYear: number, targetMonth: number) => {
   const details = document.querySelector<HTMLDetailsElement>('details.schedule');
   if (details && !details.open) {
     details.open = true;
   }
 
   const isMonthly = scheduleView === 'monthly';
-  let targetRow: HTMLElement | null = null;
-
-  if (isMonthly) {
-    targetRow = document.getElementById(`schedule-row-month-${targetMonth}`);
-  } else {
-    targetRow = document.getElementById(`schedule-row-year-${targetYear}`);
-  }
+  const targetRow = isMonthly
+    ? document.getElementById(`schedule-row-month-${targetMonth}`)
+    : document.getElementById(`schedule-row-year-${targetYear}`);
 
   if (targetRow) {
+    clearTimeout(milestoneHighlightTimer);
+    if (highlightedRow && highlightedRow !== targetRow) {
+      highlightedRow.classList.remove('milestone-row-highlight');
+    }
     targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
     targetRow.classList.remove('milestone-row-highlight');
     void targetRow.offsetWidth; // Force DOM reflow to re-trigger CSS pulse
     targetRow.classList.add('milestone-row-highlight');
-    setTimeout(() => {
-      targetRow?.classList.remove('milestone-row-highlight');
+    highlightedRow = targetRow;
+    milestoneHighlightTimer = setTimeout(() => {
+      targetRow.classList.remove('milestone-row-highlight');
+      if (highlightedRow === targetRow) highlightedRow = null;
     }, 2400);
   }
 };
@@ -386,7 +352,7 @@ const render = () => {
         customInput.max = String(a.maxPayment);
         const currentVal =
           inp.customPayment && inp.customPayment >= a.basePayment
-            ? inp.customPayment
+            ? clamp(inp.customPayment, a.basePayment, a.maxPayment)
             : a.basePayment;
         setField(customInput, fmtNum(currentVal));
       }
@@ -544,129 +510,8 @@ const render = () => {
     btn.setAttribute('aria-checked', String(active));
   });
 
-  // Calculate landmark milestone years (aligned with tippingPoint in scenarios.ts)
-  const tipInfo = tippingPoint(plan, inp.startDate);
-  const tippingYear = tipInfo.crossYear ?? -1;
-  let halfEquityYear = -1;
-  const initialPrincipal = a.loanAmount;
-
-  if (a.years && a.years.length > 0) {
-    for (const yr of a.years) {
-      if (halfEquityYear === -1 && yr.endBalance <= initialPrincipal * 0.5) {
-        halfEquityYear = yr.year;
-        break;
-      }
-    }
-  }
-
-  // Construct milestone landmark objects
-  const milestones: MilestoneData[] = [];
-  const hasMultipleYears = a.years && a.years.length > 1;
-
-  if (hasMultipleYears && initialPrincipal > 0) {
-    // 1. 5-Yr Term
-    if (a.years.length > 5) {
-      const y5 = a.years.find((y) => y.year === 5);
-      if (y5) {
-        const paidDown = Math.max(0, initialPrincipal - y5.endBalance);
-        const pctPaid = Math.round((paidDown / initialPrincipal) * 100);
-        milestones.push({
-          key: 'term',
-          title: '5-Yr Term',
-          pillClass: 'milestone-pill-term',
-          badgeClass: 'milestone-renewal',
-          icon: '↺',
-          year: 5,
-          monthIndex: Math.min(plan.rows.length, 5 * plan.periodsPerYear),
-          dateStr: formatMonthYear(y5.endDate, c),
-          mainMetric: money(y5.endBalance),
-          subMetric: 'Remaining balance',
-          descText: `${pctPaid}% of loan paid down · Fixed term concludes; renew or refinance checkpoint.`,
-          badgeDesktop: '<span class="milestone-badge milestone-renewal">5-Yr</span>',
-          pipMobile: '<span class="milestone-pip pip-renewal" title="5-Yr Term">↺</span>'
-        });
-      }
-    }
-
-    // 2. Tipping Point (unified with Tipping Point chart & exact payment row date)
-    if (tippingYear > 0) {
-      const yTip = a.years.find((y) => y.year === tippingYear);
-      if (yTip) {
-        const tipMonth =
-          tipInfo.crossRowIndex ?? Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
-        const tipDate = tipInfo.crossDate ?? yTip.endDate;
-        const yTipPrincipal = round2(yTip.principal + yTip.extra);
-        milestones.push({
-          key: 'tipping',
-          title: 'Tipping Point',
-          pillClass: 'milestone-pill-tipping',
-          badgeClass: 'milestone-tipping',
-          icon: '⚖',
-          year: tippingYear,
-          monthIndex: tipMonth,
-          dateStr: formatMonthYear(tipDate, c),
-          mainMetric: 'Principal > Interest',
-          subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
-          descText:
-            tippingYear === 1
-              ? 'From Day 1, your payments build more equity than bank interest.'
-              : 'Equity inflection point: payments build equity faster than bank interest.',
-          badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
-          pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
-        });
-      }
-    }
-
-    // 3. 50% Equity (displays exact payment date when balance crosses 50%)
-    if (halfEquityYear > 0) {
-      const yHalf = a.years.find((y) => y.year === halfEquityYear) || a.years[a.years.length - 1];
-      if (yHalf) {
-        const halfMonthRow = plan.rows.find((r) => r.balance <= initialPrincipal * 0.5);
-        const halfMonth = halfMonthRow ? halfMonthRow.n : Math.min(plan.rows.length, halfEquityYear * plan.periodsPerYear);
-        const halfDate = halfMonthRow ? halfMonthRow.date : yHalf.endDate;
-        const halfBalance = halfMonthRow ? halfMonthRow.balance : yHalf.endBalance;
-        milestones.push({
-          key: 'half',
-          title: '50% Equity',
-          pillClass: 'milestone-pill-half',
-          badgeClass: 'milestone-half',
-          icon: '½',
-          year: halfEquityYear,
-          monthIndex: halfMonth,
-          dateStr: formatMonthYear(halfDate, c),
-          mainMetric: money(halfBalance),
-          subMetric: '50% loan cleared',
-          descText: `Halfway mark · Balance halved to ${money(halfBalance)} as payoff accelerates.`,
-          badgeDesktop: '<span class="milestone-badge milestone-half">50%</span>',
-          pipMobile: '<span class="milestone-pip pip-half" title="50% Equity">½</span>'
-        });
-      }
-    }
-
-    // 4. Mortgage-Free
-    const yLast = a.years[a.years.length - 1];
-    if (yLast) {
-      const savedInfo = a.hasStrategy && a.interestSaved > 0 ? ` (saved ${money(a.interestSaved)})` : '';
-      const zeroMoney = money(0);
-      milestones.push({
-        key: 'free',
-        title: 'Mortgage-Free',
-        pillClass: 'milestone-pill-free',
-        badgeClass: 'milestone-free',
-        icon: '★',
-        year: yLast.year,
-        monthIndex: plan.rows.length,
-        dateStr: formatMonthYear(plan.payoffDate, c),
-        mainMetric: `${zeroMoney} Balance`,
-        subMetric: '100% Home equity',
-        descText: `Loan retired in ${formatDuration((plan.numPayments * 12) / plan.periodsPerYear)}${savedInfo}. Full debt freedom.`,
-        badgeDesktop: '<span class="milestone-badge milestone-free">★ Free</span>',
-        pipMobile: '<span class="milestone-pip pip-free" title="Mortgage-Free">★</span>'
-      });
-    }
-  }
-
-  // Render the Prada Milestone Horizons Showcase
+  // Calculate & render the Prada Milestone Horizons Showcase
+  const milestones = buildMilestones(a);
   renderMilestonesShowcase(milestones);
 
   $('schedule-body').innerHTML = isMonthly
@@ -746,31 +591,8 @@ const downloadCsv = () => {
 };
 
 const sharePlan = () => {
-  const inp = sanitizeInputs(state);
   const url = new URL(window.location.origin + window.location.pathname);
-  url.searchParams.set('country', inp.country);
-  url.searchParams.set('mode', inp.mode);
-  if (inp.mode === 'purchase') {
-    url.searchParams.set('price', String(inp.homePrice));
-    url.searchParams.set('down', String(inp.downPayment));
-  } else {
-    url.searchParams.set('balance', String(inp.currentBalance));
-  }
-  url.searchParams.set('rate', String(inp.annualRate));
-  url.searchParams.set('years', String(inp.amortizationYears));
-  url.searchParams.set('freq', inp.frequency);
-  url.searchParams.set('start', inp.startDate);
-  if (inp.extraMonthly > 0) url.searchParams.set('extra', String(inp.extraMonthly));
-  if (inp.annualLumpSum > 0) url.searchParams.set('lump', String(inp.annualLumpSum));
-  if (inp.paymentIncreaseEnabled && inp.customPayment) {
-    url.searchParams.set('custom', String(inp.customPayment));
-  }
-  if (inp.propertyTaxYearly > 0) url.searchParams.set('tax', String(inp.propertyTaxYearly));
-  if (inp.homeInsuranceYearly > 0) url.searchParams.set('ins', String(inp.homeInsuranceYearly));
-  if (inp.feesMonthly > 0) url.searchParams.set('fees', String(inp.feesMonthly));
-  if ((inp.country === 'US' && inp.mode === 'purchase') || inp.pmiRate !== DEFAULT_INPUTS.pmiRate) {
-    url.searchParams.set('pmi', String(inp.pmiRate));
-  }
+  url.search = serializeUrlInputs(state).toString();
 
   // Copy to clipboard
   if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -967,10 +789,9 @@ const bind = () => {
     });
   });
 
-  // Header & table print helper (forces high-contrast light mode on canvases)
+  // Header & table print helper (forces high-contrast light mode on canvases & ensures schedule is open)
   const triggerPrint = () => {
-    setPrintLightMode(true);
-    chartsManager?.drawAll();
+    prepareForPrint();
     window.print();
   };
 
@@ -988,8 +809,7 @@ const bind = () => {
       if (!card) return;
       const yr = parseInt(card.dataset.year || '0', 10);
       const mo = parseInt(card.dataset.month || '0', 10);
-      const key = card.dataset.milestone || '';
-      scrollToMilestone(key, yr, mo);
+      scrollToMilestone(yr, mo);
     });
     showcase.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
@@ -998,13 +818,41 @@ const bind = () => {
         e.preventDefault();
         const yr = parseInt(card.dataset.year || '0', 10);
         const mo = parseInt(card.dataset.month || '0', 10);
-        const key = card.dataset.milestone || '';
-        scrollToMilestone(key, yr, mo);
+        scrollToMilestone(yr, mo);
       }
     });
   }
 
   $('mortgage-form').addEventListener('submit', (e) => e.preventDefault());
+};
+
+let printPrepared = false;
+let scheduleWasClosedBeforePrint = false;
+
+const prepareForPrint = () => {
+  const details = document.querySelector<HTMLDetailsElement>('details.schedule');
+  if (details && !details.open) {
+    scheduleWasClosedBeforePrint = true;
+    details.open = true;
+  }
+  if (!printPrepared) {
+    printPrepared = true;
+    setPrintLightMode(true);
+    chartsManager?.drawAll();
+  }
+};
+
+const restoreAfterPrint = () => {
+  if (scheduleWasClosedBeforePrint) {
+    const details = document.querySelector<HTMLDetailsElement>('details.schedule');
+    if (details) details.open = false;
+    scheduleWasClosedBeforePrint = false;
+  }
+  if (printPrepared) {
+    printPrepared = false;
+    setPrintLightMode(false);
+    chartsManager?.drawAll();
+  }
 };
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -1015,12 +863,5 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 // Crisp vector print redraw in high-contrast light mode
-window.addEventListener('beforeprint', () => {
-  setPrintLightMode(true);
-  chartsManager?.drawAll();
-});
-
-window.addEventListener('afterprint', () => {
-  setPrintLightMode(false);
-  chartsManager?.drawAll();
-});
+window.addEventListener('beforeprint', prepareForPrint);
+window.addEventListener('afterprint', restoreAfterPrint);

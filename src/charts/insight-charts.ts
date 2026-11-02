@@ -62,7 +62,12 @@ export interface InsightData {
 
 /** Runs every scenario once per render (~40 schedules; a few milliseconds). */
 export const computeInsights = (a: Analysis): InsightData => {
-  const waitingIsExample = !a.hasStrategy;
+  const hasActivePrepay =
+    a.inputs.frequency.startsWith('accelerated') ||
+    a.inputs.extraMonthly > 0 ||
+    a.inputs.annualLumpSum > 0 ||
+    a.paymentIncrease > 0;
+  const waitingIsExample = !hasActivePrepay || a.interestSaved < 1;
   const waiting = waitingIsExample
     ? costOfWaiting(a, undefined, {
         frequency: 'monthly',

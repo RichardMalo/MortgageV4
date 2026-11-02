@@ -98,5 +98,42 @@ describe('Chart Utilities', () => {
       const tipHtml = INSIGHT_CHARTS.strategies.tooltip(overCapIdx, ukAnalysis, data);
       expect(tipHtml).toContain('penalty-free limit');
     });
+
+    it('uses example strategy for Cost of Waiting on non-accelerated frequencies with no extra payments', () => {
+      const semiMonthly = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'semi-monthly'
+      });
+      const semiData = computeInsights(semiMonthly);
+      expect(semiData.waitingIsExample).toBe(true);
+      expect(semiData.waiting[0]!.interestSaved).toBeGreaterThan(1000);
+
+      const biWeekly = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'bi-weekly'
+      });
+      const biData = computeInsights(biWeekly);
+      expect(biData.waitingIsExample).toBe(true);
+      expect(biData.waiting[0]!.interestSaved).toBeGreaterThan(1000);
+
+      const accelBiWeekly = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'accelerated-bi-weekly'
+      });
+      const accelData = computeInsights(accelBiWeekly);
+      expect(accelData.waitingIsExample).toBe(false);
+    });
   });
 });
