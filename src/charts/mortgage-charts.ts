@@ -224,7 +224,7 @@ export class MortgageChartsManager {
 
   private getDimensions(
     canvas: HTMLCanvasElement,
-    defaultHeight = 250,
+    defaultHeight = 240,
     padding: ChartPadding = { top: 20, right: 20, bottom: 38, left: 62 },
     expandedHeight = 420
   ) {
@@ -983,6 +983,9 @@ export class MortgageChartsManager {
     this.viewport.addEventListener(
       'scroll',
       () => {
+        if (this.viewport.scrollTop !== 0) {
+          this.viewport.scrollTop = 0;
+        }
         this.flushDirtySlides();
         if (this.isProgrammaticScrolling) return;
         clearTimeout(this.scrollDebounceTimer);

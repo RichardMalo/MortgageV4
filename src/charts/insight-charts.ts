@@ -649,14 +649,14 @@ export const extraChart: InsightChart = {
 // 4. Strategy leaderboard
 // ---------------------------------------------------------------------------
 
-const STRAT_PADDING: ChartPadding = { top: 6, right: 12, bottom: 6, left: 12 };
+const STRAT_PADDING: ChartPadding = { top: 4, right: 12, bottom: 4, left: 12 };
 
 const stratRowH = (dims: ChartDims, n: number) => dims.plotHeight / Math.max(1, n);
 
 export const strategiesChart: InsightChart = {
   id: 'strategies',
-  height: 320,
-  expandedHeight: 460,
+  height: 240,
+  expandedHeight: 420,
   padding: STRAT_PADDING,
 
   draw({ ctx, dims, a, d, colors, hover }) {
@@ -678,9 +678,9 @@ export const strategiesChart: InsightChart = {
     list.forEach((s, i) => {
       const y0 = dims.padding.top + i * rowH;
       const isHover = hover === i;
-      const barH = Math.max(6, Math.min(12, rowH - 24));
-      const barY = y0 + rowH - barH - 5;
-      const textY = barY - 6;
+      const barH = Math.max(5, Math.min(10, rowH - 21));
+      const barY = y0 + rowH - barH - 4;
+      const textY = barY - 5;
 
       if (isHover) {
         ctx.fillStyle = colors.isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(37, 99, 235, 0.06)';
