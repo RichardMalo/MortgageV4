@@ -203,11 +203,17 @@ html[data-theme='light'] {
 
 html {
   -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: clip;
+  overscroll-behavior-x: none;
+  touch-action: manipulation;
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Inter', 'Segoe UI', Roboto, sans-serif;
@@ -223,12 +229,14 @@ body {
    ========================================================================= */
 
 .app-header {
+  width: 100%;
   max-width: 1140px;
   margin: 0 auto;
   padding: 20px 24px 8px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  overflow-x: clip;
 }
 
 .brand {
@@ -365,6 +373,7 @@ html[data-theme='dark'] .icon-moon {
    ========================================================================= */
 
 .layout {
+  width: 100%;
   max-width: 1140px;
   margin: 0 auto;
   padding: 12px 24px 48px;
@@ -372,13 +381,23 @@ html[data-theme='dark'] .icon-moon {
   grid-template-columns: minmax(330px, 400px) 1fr;
   gap: 24px;
   align-items: start;
+  overflow-x: clip;
 }
 
 @media (max-width: 890px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
   .layout {
     grid-template-columns: 1fr;
     padding: 8px 12px 36px;
     gap: 16px;
+  }
+  input:not(.hero-payment-input),
+  select,
+  textarea {
+    font-size: 16px !important;
   }
 }
 
@@ -503,9 +522,10 @@ html[data-theme='dark'] .icon-moon {
 }
 
 input,
-select {
+select,
+textarea {
   font: inherit;
-  font-size: 0.98rem;
+  font-size: 16px;
   font-variant-numeric: tabular-nums lining-nums;
   line-height: normal;
   color: var(--text);
@@ -513,6 +533,7 @@ select {
   min-width: 0;
   box-sizing: border-box;
   outline: none;
+  touch-action: manipulation;
 }
 
 .input-wrap input {

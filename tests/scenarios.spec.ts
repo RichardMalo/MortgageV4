@@ -5,6 +5,7 @@ import {
   costOfWaiting,
   cumulativeAt,
   cumulativeInterest,
+  extractStrategyInputs,
   extraPaymentSweep,
   niceStep,
   strategyLeaderboard,
@@ -93,16 +94,16 @@ describe('Scenario & Decision Math Engine', () => {
       expect(strategyLeaderboard(empty)).toEqual([]);
     });
 
-    it('generates comparison strategies sorted descending by interest saved', () => {
+    it('generates comparison strategies sorted descending by interest saved and always includes current strategy', () => {
       const list = strategyLeaderboard(defaultAnalysis);
-      expect(list.length).toBeGreaterThanOrEqual(6);
+      expect(list.length).toBe(8);
 
       // Must be sorted descending by interestSaved
       for (let i = 1; i < list.length; i++) {
         expect(list[i - 1]!.interestSaved).toBeGreaterThanOrEqual(list[i]!.interestSaved);
       }
 
-      // Must contain accelerated bi-weekly and payment increase options
+      // Must contain accelerated bi-weekly, payment increase options, and the user's current strategy
       const ids = list.map((s) => s.id);
       expect(ids).toContain('accel-biweekly');
       expect(ids).toContain('inc-10');
@@ -111,12 +112,22 @@ describe('Scenario & Decision Math Engine', () => {
       expect(ids).toContain('extra-100');
       expect(ids).toContain('extra-250');
       expect(ids).toContain('lump');
+      expect(ids).toContain('current');
 
-      // Each strategy should have a valid patch
-      list.forEach((s) => {
-        expect(s.patch).toBeDefined();
-        expect(s.perDollar).toBeGreaterThan(0);
-      });
+      // Each preset strategy should have a valid patch and positive perDollar savings
+      list
+        .filter((s) => !s.isCurrent)
+        .forEach((s) => {
+          expect(s.patch).not.toBeNull();
+          expect(s.perDollar).toBeGreaterThan(0);
+        });
+
+      // Baseline current strategy is at the bottom with $0 saved
+      const current = list.find((s) => s.isCurrent);
+      expect(current).toBeDefined();
+      expect(current?.interestSaved).toBe(0);
+      expect(current?.badge).toBe('Monthly · no extras');
+      expect(current?.patch).toBeNull();
     });
 
     it('includes user current plan tagged as isCurrent', () => {
@@ -125,6 +136,38 @@ describe('Scenario & Decision Math Engine', () => {
       expect(current).toBeDefined();
       expect(current?.id).toBe('current');
       expect(current?.patch).toBeNull();
+      expect(current?.interestSaved).toBe(strategyAnalysis.interestSaved);
+    });
+
+    it('preserves the entry strategy line when playing around with other strategies in Strategy Comparison', () => {
+      const entry = extractStrategyInputs(strategyAnalysis.inputs);
+      // Simulate user clicking "Accelerated bi-weekly" inside Strategy Comparison
+      const afterClickAnalysis = analyzeMortgage({
+        ...strategyAnalysis.inputs,
+        frequency: 'accelerated-bi-weekly',
+        extraMonthly: 0,
+        annualLumpSum: 0,
+        paymentIncreaseEnabled: false
+      });
+
+      const list = strategyLeaderboard(afterClickAnalysis, entry);
+      const current = list.find((s) => s.isCurrent);
+      expect(current).toBeDefined();
+      // The current strategy bar still reflects what the user went in with before clicking around
+      expect(current?.interestSaved).toBe(strategyAnalysis.interestSaved);
+      expect(current?.badge).toBe('Accel. bi-weekly + $200/mo + $2,000/yr');
+      // And clicking it provides a patch to restore the user's entry strategy
+      expect(current?.patch).toEqual({
+        frequency: 'accelerated-bi-weekly',
+        extraMonthly: 200,
+        annualLumpSum: 2000,
+        paymentIncreaseEnabled: false,
+        customPayment: 0
+      });
+
+      // Meanwhile, the preset bar they clicked is marked as isApplied
+      const accelPreset = list.find((s) => s.id === 'accel-biweekly');
+      expect(accelPreset?.isApplied).toBe(true);
     });
 
     it('flags strategies that exceed regional penalty-free prepayment caps (e.g., UK 10% cap)', () => {

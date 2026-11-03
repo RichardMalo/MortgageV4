@@ -8,8 +8,17 @@
  */
 
 import { Analysis, MortgageInputs, ScheduleResult } from './types.js';
-import { buildSchedule, cappedPrepaymentPerYear, parseDate, paymentDate, round2, ScheduleParams } from './mortgage.js';
-import { REGIONS } from './regions.js';
+import {
+  buildSchedule,
+  cappedPrepaymentPerYear,
+  clamp,
+  parseDate,
+  paymentDate,
+  regularPayment,
+  round2,
+  ScheduleParams
+} from './mortgage.js';
+import { FREQUENCIES, REGIONS } from './regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './format.js';
 
 type BaseParams = Omit<ScheduleParams, 'frequency'>;
@@ -127,6 +136,8 @@ export const extraPaymentSweep = (a: Analysis, steps = 20, nudge = 100): ExtraSw
 export interface Strategy {
   id: string;
   label: string;
+  /** Short badge summary (e.g. for the user's current strategy pill on the chart). */
+  badge?: string;
   /** Short description of what the user commits to. */
   detail: string;
   interestSaved: number;
@@ -136,12 +147,28 @@ export interface Strategy {
   payoffDate: Date | null;
   /** Interest saved per $1 of extra cash committed over the life of the plan. */
   perDollar: number;
-  /** Form changes that adopt this strategy (null for the user's current plan). */
+  /** Form changes that adopt this strategy (null when this strategy is already active). */
   patch: Partial<MortgageInputs> | null;
   isCurrent: boolean;
+  /** True when the user has clicked/applied this preset strategy while comparing against their entry strategy. */
+  isApplied?: boolean;
   /** True when this strategy's annual prepayments exceed the region's typical penalty-free cap. */
   exceedsCap: boolean;
 }
+
+/** The repayment strategy fields of MortgageInputs (what the user configured before exploring Strategy Comparison). */
+export type StrategyInputs = Pick<
+  MortgageInputs,
+  'frequency' | 'extraMonthly' | 'annualLumpSum' | 'paymentIncreaseEnabled' | 'customPayment'
+>;
+
+export const extractStrategyInputs = (inputs: MortgageInputs): StrategyInputs => ({
+  frequency: inputs.frequency,
+  extraMonthly: inputs.extraMonthly,
+  annualLumpSum: inputs.annualLumpSum,
+  paymentIncreaseEnabled: Boolean(inputs.paymentIncreaseEnabled),
+  customPayment: inputs.customPayment ?? 0
+});
 
 const RESET_STRATEGY: Partial<MortgageInputs> = {
   frequency: 'monthly',
@@ -150,14 +177,118 @@ const RESET_STRATEGY: Partial<MortgageInputs> = {
   paymentIncreaseEnabled: false
 };
 
-/** Compares common prepayment strategies (each one on its own) plus the user's current plan. */
-export const strategyLeaderboard = (a: Analysis): Strategy[] => {
+const describeStrategy = (
+  a: Analysis,
+  entry: StrategyInputs,
+  schedule: ScheduleResult,
+  basePayment: number,
+  paymentIncrease: number
+): { badge: string; detail: string } => {
+  const money = (x: number) => formatMoney(x, a.inputs.country);
+  const parts: string[] = [];
+
+  if (entry.frequency === 'accelerated-bi-weekly') {
+    parts.push(
+      entry.extraMonthly > 0 || entry.annualLumpSum > 0 || paymentIncrease > 0
+        ? 'Accel. bi-weekly'
+        : 'Accelerated bi-weekly'
+    );
+  } else if (entry.frequency === 'accelerated-weekly') {
+    parts.push(
+      entry.extraMonthly > 0 || entry.annualLumpSum > 0 || paymentIncrease > 0
+        ? 'Accel. weekly'
+        : 'Accelerated weekly'
+    );
+  } else if (entry.frequency !== 'monthly') {
+    parts.push(FREQUENCIES[entry.frequency].label);
+  }
+
+  if (paymentIncrease > 0 && basePayment > 0) {
+    const pct = Math.round((paymentIncrease / basePayment) * 100);
+    if (Math.abs(pct - 100) <= 1) parts.push('Double-up');
+    else if (pct > 0) parts.push(`+${pct}% payment`);
+    else parts.push(`+${money(paymentIncrease)}/pmt`);
+  }
+
+  if (entry.extraMonthly > 0) {
+    parts.push(
+      entry.frequency === 'monthly' && entry.annualLumpSum <= 0 && paymentIncrease <= 0
+        ? `+${money(entry.extraMonthly)}/mo extra`
+        : `+${money(entry.extraMonthly)}/mo`
+    );
+  }
+
+  if (entry.annualLumpSum > 0) {
+    parts.push(
+      entry.frequency === 'monthly' && entry.extraMonthly <= 0 && paymentIncrease <= 0
+        ? `+${money(entry.annualLumpSum)}/yr lump sum`
+        : `+${money(entry.annualLumpSum)}/yr`
+    );
+  }
+
+  if (parts.length === 0) {
+    return {
+      badge: 'Monthly · no extras',
+      detail: `${money(schedule.regularPayment)}/mo · baseline (no extra payments)`
+    };
+  }
+
+  const badge = parts.map((p, i) => (i > 0 ? p.replace(/^\+/, '') : p)).join(' + ');
+  const freqNoun = FREQUENCIES[entry.frequency].noun;
+  return {
+    badge,
+    detail: `${badge} · ${money(schedule.regularPayment)} ${freqNoun}`
+  };
+};
+
+/**
+ * Compares common prepayment strategies (each one on its own) plus the user's current strategy
+ * (conceptually what the user went in with before playing around with Strategy Comparison).
+ */
+export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): Strategy[] => {
   if (!hasLoan(a)) return [];
   const base = baseParams(a);
   const monthlyBase = a.baseline.regularPayment;
   const region = REGIONS[a.inputs.country];
   const capLimit = region.prepaymentCap ? a.loanAmount * region.prepaymentCap : null;
   const money = (x: number) => formatMoney(x, a.inputs.country);
+
+  const entry = entryInputs ?? extractStrategyInputs(a.inputs);
+  const entryBasePayment = regularPayment({
+    ...base,
+    frequency: entry.frequency
+  });
+  const entryMaxPayment = round2(entryBasePayment * 2);
+  let entryPaymentIncrease = 0;
+  if (
+    entry.paymentIncreaseEnabled &&
+    a.loanAmount > 0 &&
+    entry.customPayment &&
+    entry.customPayment > entryBasePayment
+  ) {
+    const clampedCustom = round2(clamp(entry.customPayment, entryBasePayment, entryMaxPayment));
+    entryPaymentIncrease = round2(clampedCustom - entryBasePayment);
+  }
+
+  const isEntrySameAsActive =
+    entry.frequency === a.inputs.frequency &&
+    Math.abs(entry.extraMonthly - a.inputs.extraMonthly) < 0.05 &&
+    Math.abs(entry.annualLumpSum - a.inputs.annualLumpSum) < 0.5 &&
+    Math.abs(entryPaymentIncrease - a.paymentIncrease) < 0.05;
+
+  const matchesActive = (patch: Partial<MortgageInputs> | null): boolean => {
+    if (!patch || isEntrySameAsActive) return false;
+    const freq = patch.frequency ?? 'monthly';
+    const extra = patch.extraMonthly ?? 0;
+    const lumpVal = patch.annualLumpSum ?? 0;
+    const incVal = patch.paymentIncreaseEnabled && patch.customPayment ? round2(patch.customPayment - monthlyBase) : 0;
+    return (
+      a.inputs.frequency === freq &&
+      Math.abs(a.inputs.extraMonthly - extra) < 0.05 &&
+      Math.abs(a.inputs.annualLumpSum - lumpVal) < 0.5 &&
+      Math.abs(a.paymentIncrease - incVal) < 0.05
+    );
+  };
 
   const build = (
     id: string,
@@ -167,7 +298,8 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     extraPerYear: number,
     cappedYearly: number,
     patch: Partial<MortgageInputs> | null,
-    isCurrent = false
+    isCurrent = false,
+    badge?: string
   ): Strategy => {
     const months = scheduleMonths(s);
     const committed = Math.max(0, extraPerYear) * (months / 12);
@@ -175,15 +307,17 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     return {
       id,
       label,
+      badge,
       detail,
       interestSaved,
       monthsSaved: Math.max(0, Math.round(a.baseline.numPayments - months)),
       extraPerYear: round2(Math.max(0, extraPerYear)),
       payoffDate: s.payoffDate,
-      // Undefined (0) when the strategy costs no extra cash, e.g. regular bi-weekly.
+      // Undefined (0) when the strategy costs no extra cash, e.g. baseline monthly or regular bi-weekly.
       perDollar: committed >= 1 ? interestSaved / committed : 0,
       patch,
       isCurrent,
+      isApplied: !isCurrent && matchesActive(patch),
       exceedsCap: capLimit !== null && cappedYearly > capLimit + 0.5
     };
   };
@@ -246,24 +380,42 @@ export const strategyLeaderboard = (a: Analysis): Strategy[] => {
     })
   );
 
-  // The user's current plan, if it differs from the baseline.
-  if (a.hasStrategy) {
-    const perYear = a.plan.periodsPerYear;
-    const extraPerYear =
-      a.plan.regularPayment * perYear + a.inputs.extraMonthly * 12 + a.inputs.annualLumpSum - monthlyBase * 12;
-    const currentCapped = cappedPrepaymentPerYear(
-      a.inputs.country,
-      a.inputs.extraMonthly,
-      a.inputs.annualLumpSum,
-      a.paymentIncrease,
-      perYear
-    );
-    list.push(
-      build('current', 'Your current plan', 'What you entered above', a.plan, extraPerYear, currentCapped, null, true)
-    );
-  }
+  // Always include the user's current strategy (what they went in with before playing around with Strategy Comparison).
+  const entrySchedule = isEntrySameAsActive
+    ? a.plan
+    : buildSchedule({
+        ...base,
+        frequency: entry.frequency,
+        extraMonthly: entry.extraMonthly,
+        annualLumpSum: entry.annualLumpSum,
+        paymentIncrease: entryPaymentIncrease
+      });
+  const perYear = entrySchedule.periodsPerYear;
+  const extraPerYear =
+    entrySchedule.regularPayment * perYear + entry.extraMonthly * 12 + entry.annualLumpSum - monthlyBase * 12;
+  const currentCapped = cappedPrepaymentPerYear(
+    a.inputs.country,
+    entry.extraMonthly,
+    entry.annualLumpSum,
+    entryPaymentIncrease,
+    perYear
+  );
+  const { badge, detail } = describeStrategy(a, entry, entrySchedule, entryBasePayment, entryPaymentIncrease);
+  const currentPatch: Partial<MortgageInputs> | null = isEntrySameAsActive
+    ? null
+    : {
+        frequency: entry.frequency,
+        extraMonthly: entry.extraMonthly,
+        annualLumpSum: entry.annualLumpSum,
+        paymentIncreaseEnabled: Boolean(entry.paymentIncreaseEnabled),
+        customPayment: entry.customPayment ?? 0
+      };
 
-  return list.sort((x, y) => y.interestSaved - x.interestSaved);
+  list.push(
+    build('current', 'Your current strategy', detail, entrySchedule, extraPerYear, currentCapped, currentPatch, true, badge)
+  );
+
+  return list.sort((x, y) => y.interestSaved - x.interestSaved || (y.isCurrent ? 1 : 0) - (x.isCurrent ? 1 : 0));
 };
 
 // ---------------------------------------------------------------------------

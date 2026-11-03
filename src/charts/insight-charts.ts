@@ -19,6 +19,7 @@ import {
   DelayPoint,
   ExtraSweep,
   Strategy,
+  StrategyInputs,
   TippingPoint,
   YearSplit,
   costOfWaiting,
@@ -61,7 +62,7 @@ export interface InsightData {
 }
 
 /** Runs every scenario once per render (~40 schedules; a few milliseconds). */
-export const computeInsights = (a: Analysis): InsightData => {
+export const computeInsights = (a: Analysis, entryStrategy?: StrategyInputs): InsightData => {
   const hasActivePrepay =
     a.inputs.frequency.startsWith('accelerated') ||
     a.inputs.extraMonthly > 0 ||
@@ -78,7 +79,7 @@ export const computeInsights = (a: Analysis): InsightData => {
     : costOfWaiting(a);
   return {
     sweep: extraPaymentSweep(a),
-    strategies: strategyLeaderboard(a),
+    strategies: strategyLeaderboard(a, entryStrategy),
     waiting,
     waitingIsExample,
     planCum: cumulativeInterest(a.plan),
@@ -672,7 +673,7 @@ export const strategiesChart: InsightChart = {
     const pool = candidates.length > 0 ? candidates : fallbackCandidates;
     const bestValue =
       pool.length > 0 ? pool.reduce((best, s) => (s.perDollar > best.perDollar ? s : best), pool[0]!) : null;
-    const topPenaltyFree = list.find((s) => !s.exceedsCap) ?? list[0]!;
+    const topPenaltyFree = list.find((s) => !s.isCurrent && !s.exceedsCap) ?? list.find((s) => !s.exceedsCap) ?? list[0]!;
     const wide = dims.width > 460;
 
     list.forEach((s, i) => {
@@ -689,16 +690,37 @@ export const strategiesChart: InsightChart = {
         ctx.fill();
       }
 
+      // Value (right) — measured first so left pill tags never collide with it
+      const valueText =
+        s.monthsSaved >= 1
+          ? dims.width < 380
+            ? `${compact(a, s.interestSaved)} · −${formatDuration(s.monthsSaved)}`
+            : `${wide ? money(a, s.interestSaved) : compact(a, s.interestSaved)} · ${formatDuration(s.monthsSaved)} sooner`
+          : s.isCurrent && s.interestSaved < 1
+            ? `${wide ? `${money(a, 0)} saved` : compact(a, 0)} · baseline`
+            : wide
+              ? money(a, s.interestSaved)
+              : compact(a, s.interestSaved);
+
+      ctx.textAlign = 'right';
+      ctx.font = font(11, 600);
+      ctx.fillStyle = s.isCurrent ? colors.accentColor : colors.extraColor;
+      const rightEdge = dims.padding.left + dims.plotWidth;
+      const valueWidth = ctx.measureText(valueText).width;
+      ctx.fillText(valueText, rightEdge, textY);
+
       // Label (+ tags on wide screens)
       ctx.textAlign = 'left';
       ctx.font = font(12, s.isCurrent || isHover ? 700 : 500);
       ctx.fillStyle = s.isCurrent ? colors.accentColor : colors.textColor;
       ctx.fillText(s.label, dims.padding.left, textY);
       let tagX = dims.padding.left + ctx.measureText(s.label).width + 8;
+      const maxTagRight = rightEdge - valueWidth - 10;
 
       const tag = (text: string, color: string) => {
         ctx.font = font(10, 600);
         const w = ctx.measureText(text).width + 10;
+        if (tagX + w > maxTagRight) return;
         ctx.save();
         ctx.globalAlpha = 0.14;
         ctx.fillStyle = color;
@@ -711,24 +733,12 @@ export const strategiesChart: InsightChart = {
         tagX += w + 6;
       };
       if (wide) {
-        if (s === topPenaltyFree) tag('Most savings', colors.extraColor);
-        if (bestValue && s === bestValue) tag('Best value', colors.warnColor);
+        if (s.isCurrent && s.badge) tag(s.badge, colors.accentColor);
+        if (!s.isCurrent && s === topPenaltyFree) tag('Most savings', colors.extraColor);
+        if (!s.isCurrent && bestValue && s === bestValue) tag('Best value', colors.warnColor);
+        if (!s.isCurrent && s.isApplied) tag('Applied', colors.accentColor);
         if (s.exceedsCap) tag('Over cap', colors.warnColor);
       }
-
-      // Value (right)
-      ctx.textAlign = 'right';
-      ctx.font = font(11, 600);
-      ctx.fillStyle = s.isCurrent ? colors.accentColor : colors.extraColor;
-      const valueText =
-        s.monthsSaved >= 1
-          ? dims.width < 380
-            ? `${compact(a, s.interestSaved)} · −${formatDuration(s.monthsSaved)}`
-            : `${wide ? money(a, s.interestSaved) : compact(a, s.interestSaved)} · ${formatDuration(s.monthsSaved)} sooner`
-          : wide
-            ? money(a, s.interestSaved)
-            : compact(a, s.interestSaved);
-      ctx.fillText(valueText, dims.padding.left + dims.plotWidth, textY);
 
       // Track + bar
       ctx.fillStyle = colors.gridColor;
@@ -762,16 +772,20 @@ export const strategiesChart: InsightChart = {
     const s = d.strategies[i];
     if (!s) return '';
     const ctaText = s.isCurrent
-      ? 'This is your current plan'
-      : a.hasStrategy
-        ? 'Click to switch strategy (replaces current extras)'
-        : 'Click to apply this strategy';
+      ? s.patch
+        ? 'Click to return to your current strategy'
+        : 'This is your current strategy'
+      : s.isApplied
+        ? 'Currently applied — click another bar to compare'
+        : a.hasStrategy
+          ? 'Click to switch strategy (replaces current extras)'
+          : 'Click to apply this strategy';
     return `
       <div class="tip-header">${s.label}</div>
       <div class="tip-row muted"><span>${s.detail}</span></div>
       <div class="tip-divider"></div>
       <div class="tip-row good"><span>Interest saved:</span> <strong>${money(a, s.interestSaved)}</strong></div>
-      <div class="tip-row plan"><span>Time saved:</span> <strong>${formatDuration(s.monthsSaved)}</strong></div>
+      <div class="tip-row plan"><span>Time saved:</span> <strong>${s.monthsSaved > 0 ? formatDuration(s.monthsSaved) : '0 mos (baseline)'}</strong></div>
       <div class="tip-row muted"><span>Extra cash per year:</span> <strong>${money(a, s.extraPerYear)}</strong></div>
       <div class="tip-row muted"><span>Debt-free:</span> <strong>${monthYear(a, s.payoffDate)}</strong></div>
       ${s.perDollar > 0 ? `<div class="tip-row muted"><span>Saved per ${money(a, 1)} extra:</span> <strong>${formatMoney(s.perDollar, a.inputs.country, true)}</strong></div>` : ''}
@@ -783,7 +797,7 @@ export const strategiesChart: InsightChart = {
   caption(a, d) {
     const list = d.strategies;
     if (list.length === 0) return '';
-    const top = list.find((s) => !s.exceedsCap) ?? list[0]!;
+    const top = list.find((s) => !s.isCurrent && !s.exceedsCap) ?? list.find((s) => !s.exceedsCap) ?? list[0]!;
     const candidates = list.filter((s) => !s.isCurrent && !s.exceedsCap && s.perDollar > 0);
     const fallback = list.filter((s) => !s.isCurrent && s.perDollar > 0);
     const pool = candidates.length > 0 ? candidates : fallback;
@@ -796,7 +810,10 @@ export const strategiesChart: InsightChart = {
         )} saved per ${money(a, 1)}.`
       : '';
     const lead = `${b(top.label)} saves the most within typical limits (${b(money(a, top.interestSaved))}).${valuePart}`;
-    const yours = current ? ` Your plan ranks ${b(`#${rank} of ${list.length}`)}.` : ' Tap a bar to apply it.';
+    const yours =
+      current && current.interestSaved >= 1
+        ? ` Your strategy ranks ${b(`#${rank} of ${list.length}`)}.`
+        : ' Tap a bar to apply it.';
     return lead + yours;
   },
 
@@ -806,7 +823,8 @@ export const strategiesChart: InsightChart = {
   apply(i, _a, d) {
     const s = d.strategies[i];
     if (!s || !s.patch) return null;
-    return { patch: s.patch, message: `Applied: ${s.label}` };
+    const label = s.isCurrent && s.badge ? `${s.label} (${s.badge})` : s.label;
+    return { patch: s.patch, message: s.isCurrent ? `Restored: ${label}` : `Applied: ${s.label}` };
   }
 };
 

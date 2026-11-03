@@ -32,6 +32,7 @@ import {
   getThemeColors,
   initHiDpiCanvas
 } from './chart-utils.js';
+import { StrategyInputs } from '../core/scenarios.js';
 import { ApplyAction, INSIGHT_CHARTS, InsightChart, InsightData, computeInsights } from './insight-charts.js';
 
 // Re-exported for backwards compatibility (tests and other modules import them from here).
@@ -56,7 +57,7 @@ interface SlideDef {
 
 export interface ChartsManagerOptions {
   /** Called when the user clicks a chart point that maps to a plan change. */
-  onApply?: (action: ApplyAction) => void;
+  onApply?: (action: ApplyAction, chartId: string) => void;
 }
 
 export class MortgageChartsManager {
@@ -168,10 +169,10 @@ export class MortgageChartsManager {
     return canvas;
   }
 
-  public render(analysis: Analysis, hasLoan: boolean) {
+  public render(analysis: Analysis, hasLoan: boolean, entryStrategy?: StrategyInputs) {
     this.currentAnalysis = analysis;
     this.hasLoan = hasLoan;
-    this.insightData = hasLoan ? computeInsights(analysis) : null;
+    this.insightData = hasLoan ? computeInsights(analysis, entryStrategy) : null;
 
     // Toggle baseline legend visibility on the balance slide
     const baselineLegend = document.getElementById('legend-baseline');
@@ -323,7 +324,7 @@ export class MortgageChartsManager {
       const action = chart.apply(idx, this.currentAnalysis, this.insightData);
       if (action) {
         this.hideTooltip();
-        this.options.onApply?.(action);
+        this.options.onApply?.(action, chart.id);
       }
     });
   }
@@ -1059,7 +1060,7 @@ export class MortgageChartsManager {
             const action = chart.apply(idx, this.currentAnalysis, this.insightData);
             if (action) {
               this.hideTooltip();
-              this.options.onApply?.(action);
+              this.options.onApply?.(action, chart.id);
             }
           }
         }

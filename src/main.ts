@@ -6,13 +6,20 @@
 import { analyzeMortgage, clamp, parseUrlInputs, sanitizeInputs, serializeUrlInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
-import { MilestoneData, buildMilestones } from './core/scenarios.js';
+import { MilestoneData, StrategyInputs, buildMilestones, extractStrategyInputs } from './core/scenarios.js';
 import { Analysis, Country, MortgageInputs } from './core/types.js';
 import { MortgageChartsManager, setPrintLightMode } from './charts/mortgage-charts.js';
 
 const STORAGE_KEY = 'truemortgage:v5.1';
 const THEME_KEY = 'truemortgage:theme';
 const TEXT_KEYS = new Set<keyof MortgageInputs>(['country', 'mode', 'frequency', 'startDate']);
+const STRATEGY_KEYS: Array<keyof MortgageInputs> = [
+  'frequency',
+  'extraMonthly',
+  'annualLumpSum',
+  'paymentIncreaseEnabled',
+  'customPayment'
+];
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -46,6 +53,7 @@ const loadState = (): MortgageInputs => {
 };
 
 let state: MortgageInputs = loadState();
+let entryStrategy: StrategyInputs = extractStrategyInputs(state);
 let scheduleView: 'yearly' | 'monthly' = 'yearly';
 let lastAnalysis: Analysis | null = null;
 let chartsManager: MortgageChartsManager | null = null;
@@ -62,8 +70,11 @@ const save = () => {
   }, 250);
 };
 
-const update = (patch: Partial<MortgageInputs>) => {
+const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false) => {
   state = { ...state, ...patch };
+  if (!preserveEntryStrategy && STRATEGY_KEYS.some((k) => k in patch)) {
+    entryStrategy = extractStrategyInputs(state);
+  }
   clearUrlQueryIfPresent();
   save();
   render();
@@ -413,14 +424,17 @@ const render = () => {
   // Multi-graph carousel
   if (!chartsManager) {
     chartsManager = new MortgageChartsManager({
-      onApply: (action) => {
+      onApply: (action, chartId) => {
         const previousState = { ...state };
-        update(action.patch);
+        const previousEntry = { ...entryStrategy };
+        const fromStrategies = chartId === 'strategies';
+        update(action.patch, fromStrategies);
         syncForm();
         showToast(action.message, {
           actionLabel: 'Undo',
           onAction: () => {
-            update(previousState);
+            entryStrategy = previousEntry;
+            update(previousState, true);
             syncForm();
             showToast('Reverted strategy change');
           }
@@ -428,7 +442,7 @@ const render = () => {
       }
     });
   }
-  chartsManager.render(a, hasLoan);
+  chartsManager.render(a, hasLoan, entryStrategy);
 
   // Breakdown
   const totalPrincipal = a.loanAmount;
@@ -608,6 +622,19 @@ const sharePlan = () => {
 
 // ---------- events ----------
 
+/** Ensures mobile screens remain dead-center with zero horizontal drift after keyboard dismissal. */
+const resetMobileViewportOffset = () => {
+  if (typeof window === 'undefined') return;
+  const recenter = () => {
+    if (window.scrollX !== 0) {
+      window.scrollTo({ left: 0, top: window.scrollY, behavior: 'instant' as ScrollBehavior });
+    }
+  };
+  recenter();
+  requestAnimationFrame(recenter);
+  setTimeout(recenter, 120);
+};
+
 const bind = () => {
   // Input fields
   document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]').forEach((el) => {
@@ -624,10 +651,17 @@ const bind = () => {
       if (key === 'amortizationYears') syncAmortPills();
     };
     el.addEventListener(el.tagName === 'SELECT' || el.getAttribute('type') === 'date' ? 'change' : 'input', handler);
+    el.addEventListener('keydown', (e) => {
+      if ((e as KeyboardEvent).key === 'Enter' && el.tagName === 'INPUT') {
+        e.preventDefault();
+        el.blur();
+      }
+    });
     el.addEventListener('blur', () => {
       state = sanitizeInputs(state);
       syncForm();
       render();
+      resetMobileViewportOffset();
     });
   });
 
@@ -640,10 +674,17 @@ const bind = () => {
     setField($<HTMLInputElement>('in-down'), String(down));
     syncDownPct();
   });
+  downPctInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      downPctInput.blur();
+    }
+  });
   downPctInput.addEventListener('blur', () => {
     state = sanitizeInputs(state);
     syncForm();
     render();
+    resetMobileViewportOffset();
   });
 
   // Down payment preset micro-pills
@@ -739,6 +780,13 @@ const bind = () => {
       }
     });
 
+    customInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        customInput.blur();
+      }
+    });
+
     customInput.addEventListener('blur', () => {
       if (lastAnalysis) {
         const val = parseFloat(customInput.value);
@@ -750,6 +798,7 @@ const bind = () => {
         customInput.value = fmtNum(clamped);
         update({ customPayment: clamped });
       }
+      resetMobileViewportOffset();
     });
   }
 
@@ -774,7 +823,9 @@ const bind = () => {
   // Reset
   $('btn-reset').addEventListener('click', () => {
     const previousState = { ...state };
+    const previousEntry = { ...entryStrategy };
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };
+    entryStrategy = extractStrategyInputs(state);
     clearUrlQueryIfPresent();
     save();
     syncForm();
@@ -782,7 +833,8 @@ const bind = () => {
     showToast('Parameters reset to default', {
       actionLabel: 'Undo',
       onAction: () => {
-        update(previousState);
+        entryStrategy = previousEntry;
+        update(previousState, true);
         syncForm();
         showToast('Restored previous parameters');
       }
@@ -823,7 +875,13 @@ const bind = () => {
     });
   }
 
-  $('mortgage-form').addEventListener('submit', (e) => e.preventDefault());
+  $('mortgage-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    resetMobileViewportOffset();
+  });
 };
 
 let printPrepared = false;
