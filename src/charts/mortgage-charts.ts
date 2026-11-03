@@ -22,7 +22,6 @@
 
 import { Analysis } from '../core/types.js';
 import { formatDuration, formatMoney, formatMonthYear } from '../core/format.js';
-import { REGIONS } from '../core/regions.js';
 import {
   ChartPadding,
   drawEmptyState,
@@ -895,18 +894,9 @@ export class MortgageChartsManager {
       const next = Math.max(1, Math.min(total, cur + delta * step));
       this.hoverBalancePeriod = next;
       this.drawBalanceChart();
-      const row = a.plan.rows[next - 1];
-      if (row) {
-        const c = a.inputs.country;
-        const locale = REGIONS[c]?.locale || 'en-CA';
-        const dateStr = row.date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
-        const yr = Math.ceil(row.n / a.plan.periodsPerYear);
-        this.showTooltip(
-          centerClientX,
-          topClientY,
-          `<div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
-           <div class="tip-row plan"><span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong></div>`
-        );
+      const html = this.buildBalanceTooltipHtml(a, next);
+      if (html) {
+        this.showTooltip(centerClientX, topClientY, html);
       }
       return;
     }
@@ -929,16 +919,10 @@ export class MortgageChartsManager {
       const next = cur === null ? (delta > 0 ? 0 : count - 1) : (cur + delta + count) % count;
       this.hoverCashFlowYearIdx = next;
       this.drawCashFlowChart();
-      const yr = a.years[next]!;
-      const c = a.inputs.country;
-      const totalPaid = yr.interest + yr.principal + yr.extra;
-      this.showTooltip(
-        centerClientX,
-        topClientY,
-        `<div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
-         <div class="tip-row total"><span>Total Paid:</span> <strong>${formatMoney(totalPaid, c)}</strong></div>
-         <div class="tip-row muted"><span>Balance left:</span> <strong>${formatMoney(yr.endBalance, c)}</strong></div>`
-      );
+      const html = this.buildCashFlowTooltipHtml(a, next);
+      if (html) {
+        this.showTooltip(centerClientX, topClientY, html);
+      }
     }
   }
 
@@ -1099,6 +1083,43 @@ export class MortgageChartsManager {
   // =========================================================================
   // Canvas: Balance Over Time Interactivity
   // =========================================================================
+  public buildBalanceTooltipHtml(a: Analysis, period: number): string {
+    const row = a.plan.rows[period - 1];
+    if (!row) return '';
+    const c = a.inputs.country;
+    const dateStr = formatMonthYear(row.date, c);
+    const yr = Math.ceil(row.n / a.plan.periodsPerYear);
+
+    let baselineHtml = '';
+    if (a.hasStrategy && a.baseline.rows.length > 0) {
+      const baseIdx = Math.min(
+        a.baseline.rows.length - 1,
+        Math.round((row.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
+      );
+      if (baseIdx >= 0 && a.baseline.rows[baseIdx]) {
+        const bRow = a.baseline.rows[baseIdx]!;
+        const diff = bRow.balance - row.balance;
+        baselineHtml = `
+          <div class="tip-row muted">
+            <span>Baseline:</span> <strong>${formatMoney(bRow.balance, c)}</strong>
+          </div>
+          ${diff > 50 ? `<div class="tip-row good"><span>Ahead:</span> <strong>${formatMoney(diff, c)}</strong></div>` : ''}
+        `;
+      }
+    }
+
+    return `
+      <div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
+      <div class="tip-row plan">
+        <span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong>
+      </div>
+      ${baselineHtml}
+      <div class="tip-divider"></div>
+      <div class="tip-row muted"><span>Principal paid:</span> <strong>${formatMoney(row.principal + row.extra, c)}</strong></div>
+      <div class="tip-row muted"><span>Interest paid:</span> <strong>${formatMoney(row.interest, c)}</strong></div>
+    `;
+  }
+
   private bindBalanceInteractivity() {
     const handleMove = (clientX: number, clientY: number) => {
       if (!this.hasLoan || !this.currentAnalysis || this.slides[this.activeIndex]?.id !== 'balance') return;
@@ -1135,41 +1156,8 @@ export class MortgageChartsManager {
       this.hoverBalancePeriod = nextPeriod;
       this.drawBalanceChart();
 
-      const row = a.plan.rows[this.hoverBalancePeriod - 1];
-      if (row) {
-        const c = a.inputs.country;
-        const locale = REGIONS[c]?.locale || 'en-CA';
-        const dateStr = row.date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
-        const yr = Math.ceil(row.n / a.plan.periodsPerYear);
-
-        let baselineHtml = '';
-        if (a.hasStrategy && a.baseline.rows.length > 0) {
-          const baseIdx = Math.min(
-            a.baseline.rows.length - 1,
-            Math.round((row.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
-          );
-          if (baseIdx >= 0 && a.baseline.rows[baseIdx]) {
-            const bRow = a.baseline.rows[baseIdx]!;
-            const diff = bRow.balance - row.balance;
-            baselineHtml = `
-              <div class="tip-row muted">
-                <span>Baseline:</span> <strong>${formatMoney(bRow.balance, c)}</strong>
-              </div>
-              ${diff > 50 ? `<div class="tip-row good"><span>Ahead:</span> <strong>${formatMoney(diff, c)}</strong></div>` : ''}
-            `;
-          }
-        }
-
-        const html = `
-          <div class="tip-header">${dateStr} · Year ${yr} <span class="tip-sub">#${row.n}</span></div>
-          <div class="tip-row plan">
-            <span>Balance:</span> <strong>${formatMoney(row.balance, c)}</strong>
-          </div>
-          ${baselineHtml}
-          <div class="tip-divider"></div>
-          <div class="tip-row muted"><span>Principal paid:</span> <strong>${formatMoney(row.principal + row.extra, c)}</strong></div>
-          <div class="tip-row muted"><span>Interest paid:</span> <strong>${formatMoney(row.interest, c)}</strong></div>
-        `;
+      const html = this.buildBalanceTooltipHtml(a, this.hoverBalancePeriod);
+      if (html) {
         this.showTooltip(clientX, clientY, html);
       }
     };
@@ -1354,6 +1342,23 @@ export class MortgageChartsManager {
   // =========================================================================
   // Canvas 2: Annual Cash Flow Interactivity
   // =========================================================================
+  public buildCashFlowTooltipHtml(a: Analysis, idx: number): string {
+    const yr = a.years[idx];
+    if (!yr) return '';
+    const c = a.inputs.country;
+    const totalPaid = yr.interest + yr.principal + yr.extra;
+
+    return `
+      <div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
+      ${yr.extra > 0 ? `<div class="tip-row extra"><span><i class="swatch extra"></i>Extra:</span> <strong>${formatMoney(yr.extra, c)}</strong></div>` : ''}
+      <div class="tip-row principal"><span><i class="swatch chart-principal"></i>Principal:</span> <strong>${formatMoney(yr.principal, c)}</strong></div>
+      <div class="tip-row interest"><span><i class="swatch chart-interest"></i>Interest:</span> <strong>${formatMoney(yr.interest, c)}</strong></div>
+      <div class="tip-divider"></div>
+      <div class="tip-row total"><span>Total Paid:</span> <strong>${formatMoney(totalPaid, c)}</strong></div>
+      <div class="tip-row muted"><span>Balance left:</span> <strong>${formatMoney(yr.endBalance, c)}</strong></div>
+    `;
+  }
+
   private bindCashFlowInteractivity() {
     const handleMove = (clientX: number, clientY: number) => {
       if (
@@ -1390,20 +1395,10 @@ export class MortgageChartsManager {
       this.hoverCashFlowYearIdx = idx;
       this.drawCashFlowChart();
 
-      const yr = years[idx]!;
-      const c = a.inputs.country;
-      const totalPaid = yr.interest + yr.principal + yr.extra;
-
-      const html = `
-        <div class="tip-header">${yr.endDate.getFullYear()} · Year ${yr.year}</div>
-        ${yr.extra > 0 ? `<div class="tip-row extra"><span><i class="swatch extra"></i>Extra:</span> <strong>${formatMoney(yr.extra, c)}</strong></div>` : ''}
-        <div class="tip-row principal"><span><i class="swatch chart-principal"></i>Principal:</span> <strong>${formatMoney(yr.principal, c)}</strong></div>
-        <div class="tip-row interest"><span><i class="swatch chart-interest"></i>Interest:</span> <strong>${formatMoney(yr.interest, c)}</strong></div>
-        <div class="tip-divider"></div>
-        <div class="tip-row total"><span>Total Paid:</span> <strong>${formatMoney(totalPaid, c)}</strong></div>
-        <div class="tip-row muted"><span>Balance left:</span> <strong>${formatMoney(yr.endBalance, c)}</strong></div>
-      `;
-      this.showTooltip(clientX, clientY, html);
+      const html = this.buildCashFlowTooltipHtml(a, idx);
+      if (html) {
+        this.showTooltip(clientX, clientY, html);
+      }
     };
 
     this.canvasCashFlow.addEventListener('mousemove', (e) => handleMove(e.clientX, e.clientY));

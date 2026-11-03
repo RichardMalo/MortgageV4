@@ -1040,6 +1040,12 @@ input[type='number']::-webkit-outer-spin-button {
   transform: translateY(0);
 }
 
+.hero-chip.active {
+  background: #ffffff;
+  color: #0c1019;
+  border-color: #ffffff;
+}
+
 .hero-sub {
   margin-top: 8px;
   font-size: 0.88rem;
@@ -1047,6 +1053,10 @@ input[type='number']::-webkit-outer-spin-button {
   letter-spacing: -0.01em;
 }
 .hero-sub:empty {
+  display: none;
+}
+
+.hero-print-meta {
   display: none;
 }
 
@@ -2632,7 +2642,6 @@ select:focus-visible {
     font-size: 11pt;
   }
 
-  .app-header,
   .inputs,
   .header-actions,
   .chart-tabs,
@@ -2644,8 +2653,15 @@ select:focus-visible {
   .toast,
   .hero-toggle,
   .hero-increase-bar,
+  .hero-input-wrap,
   .milestone-card-foot {
     display: none !important;
+  }
+
+  .app-header {
+    padding: 0 0 12px 0 !important;
+    margin-bottom: 12px !important;
+    border-bottom: 1px solid #cccccc !important;
   }
 
   .layout {
@@ -2670,10 +2686,26 @@ select:focus-visible {
     box-shadow: none !important;
   }
 
+  .hero-display-static {
+    display: inline-flex !important;
+  }
+
   .hero-amount,
   .hero-label,
-  .hero-sub {
+  .hero-sub,
+  .hero-payment-input,
+  .hero-currency,
+  .hero-freq {
     color: #000000 !important;
+  }
+
+  .hero-print-meta {
+    display: block !important;
+    margin-top: 8px !important;
+    padding-top: 8px !important;
+    border-top: 1px solid #d4d4d4 !important;
+    font-size: 9.5pt !important;
+    color: #262626 !important;
   }
 
   .milestones-showcase {

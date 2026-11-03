@@ -121,7 +121,7 @@ export interface Analysis {
   monthsSaved: number;
   /** Required payment expressed per month (for budgeting). */
   monthlyEquivalent: number;
-  /** Monthly housing cost: effective payment + tax + insurance + fees + PMI (includes payment increase privilege; excludes ad-hoc extraMonthly/lumpSum). */
+  /** Monthly housing cost: effective payment + extraMonthly + tax + insurance + fees + PMI (excludes annual lumpSum). */
   monthlyHousingCost: number;
   years: YearRow[];
   notes: Note[];

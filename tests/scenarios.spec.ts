@@ -319,7 +319,7 @@ describe('Scenario & Decision Math Engine', () => {
       }
     });
 
-    it('omits the 5-Yr Term Renewal milestone when amortization is 5 years or less', () => {
+    it('omits the 5-Yr Term Renewal milestone when amortization is 5 years or less, and supports 1-year payoff', () => {
       const shortAnalysis = analyzeMortgage({
         country: 'CA',
         homePrice: 300_000,
@@ -331,6 +331,17 @@ describe('Scenario & Decision Math Engine', () => {
       const milestones = buildMilestones(shortAnalysis);
       expect(milestones.some((m) => m.key === 'term')).toBe(false);
       expect(milestones.some((m) => m.key === 'free')).toBe(true);
+
+      const oneYearAnalysis = analyzeMortgage({
+        country: 'CA',
+        mode: 'existing',
+        currentBalance: 50_000,
+        annualRate: 5,
+        amortizationYears: 1,
+        frequency: 'monthly'
+      });
+      const oneYearMilestones = buildMilestones(oneYearAnalysis);
+      expect(oneYearMilestones.map((m) => m.key)).toEqual(['tipping', 'half', 'free']);
     });
   });
 });

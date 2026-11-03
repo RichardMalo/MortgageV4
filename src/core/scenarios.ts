@@ -634,7 +634,7 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
   const money = (x: number, cents = false) => formatMoney(x, c, cents);
   const initialPrincipal = a.loanAmount;
 
-  if (!a.years || a.years.length <= 1 || initialPrincipal <= 0) {
+  if (!a.years || a.years.length === 0 || initialPrincipal <= 0) {
     return [];
   }
 

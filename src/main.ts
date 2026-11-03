@@ -3,9 +3,9 @@
  * One form in, one analysis out. All math lives in ./core/mortgage.ts.
  */
 
-import { analyzeMortgage, clamp, parseUrlInputs, sanitizeInputs, serializeUrlInputs } from './core/mortgage.js';
+import { analyzeMortgage, clamp, parseUrlInputs, round2, sanitizeInputs, serializeUrlInputs } from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
-import { formatDuration, formatMoney, formatMonthYear, isoDate } from './core/format.js';
+import { formatDuration, formatMoney, formatMonthYear, formatShortDate, isoDate } from './core/format.js';
 import { MilestoneData, StrategyInputs, buildMilestones, extractStrategyInputs } from './core/scenarios.js';
 import { Analysis, Country, MortgageInputs } from './core/types.js';
 import { MortgageChartsManager, setPrintLightMode } from './charts/mortgage-charts.js';
@@ -52,10 +52,21 @@ const loadState = (): MortgageInputs => {
   return { ...DEFAULT_INPUTS, startDate: defaultStartDate() };
 };
 
+const computeRatioFromState = (s: MortgageInputs): number => {
+  if (!s.paymentIncreaseEnabled || !s.customPayment) return 1;
+  const a = analyzeMortgage(s);
+  return a.basePayment > 0 && s.customPayment >= a.basePayment
+    ? clamp(s.customPayment / a.basePayment, 1, 2)
+    : 1;
+};
+
 let state: MortgageInputs = loadState();
+let paymentIncreaseRatio: number = computeRatioFromState(state);
 let entryStrategy: StrategyInputs = extractStrategyInputs(state);
 let scheduleView: 'yearly' | 'monthly' = 'yearly';
 let lastAnalysis: Analysis | null = null;
+let lastMilestones: MilestoneData[] = [];
+let scheduleDirty = false;
 let chartsManager: MortgageChartsManager | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -70,8 +81,28 @@ const save = () => {
   }, 250);
 };
 
-const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false) => {
+const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, explicitRatio?: number) => {
   state = { ...state, ...patch };
+  if (explicitRatio !== undefined) {
+    paymentIncreaseRatio = clamp(explicitRatio, 1, 2);
+  } else if ('customPayment' in patch) {
+    const prelim = analyzeMortgage(state);
+    if (state.paymentIncreaseEnabled && prelim.basePayment > 0 && state.customPayment) {
+      paymentIncreaseRatio = clamp(state.customPayment / prelim.basePayment, 1, 2);
+    } else if (!state.paymentIncreaseEnabled) {
+      paymentIncreaseRatio = 1;
+    }
+  } else if (state.paymentIncreaseEnabled) {
+    const prelim = analyzeMortgage(state);
+    if (prelim.basePayment > 0) {
+      state.customPayment = round2(
+        clamp(prelim.basePayment * paymentIncreaseRatio, prelim.basePayment, prelim.maxPayment)
+      );
+      if (!STRATEGY_KEYS.some((k) => k in patch) && entryStrategy.paymentIncreaseEnabled) {
+        entryStrategy.customPayment = state.customPayment;
+      }
+    }
+  }
   if (!preserveEntryStrategy && STRATEGY_KEYS.some((k) => k in patch)) {
     entryStrategy = extractStrategyInputs(state);
   }
@@ -194,6 +225,19 @@ const syncForm = () => {
   syncAmortPills();
 };
 
+/** Automatically opens the Optional Housing Costs section when non-zero housing costs are present in state. */
+const syncCostsSectionOpen = () => {
+  const hasCustomCosts =
+    state.propertyTaxYearly > 0 ||
+    state.homeInsuranceYearly > 0 ||
+    state.feesMonthly > 0 ||
+    (state.country === 'US' && state.mode === 'purchase' && state.pmiRate !== DEFAULT_INPUTS.pmiRate);
+  if (hasCustomCosts) {
+    const costsSection = $<HTMLDetailsElement>('costs-section');
+    if (costsSection) costsSection.open = true;
+  }
+};
+
 /** Shows/hides mode- and country-specific fields and localises labels. */
 const syncVisibility = () => {
   const region = REGIONS[state.country];
@@ -237,6 +281,10 @@ const scrollToMilestone = (targetYear: number, targetMonth: number) => {
   if (details && !details.open) {
     details.open = true;
   }
+  if (scheduleDirty && lastAnalysis) {
+    renderScheduleRows(lastAnalysis, lastMilestones);
+    scheduleDirty = false;
+  }
 
   const isMonthly = scheduleView === 'monthly';
   const targetRow = isMonthly
@@ -272,9 +320,10 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
   }
   wrap.hidden = false;
   if (countEl) {
-    countEl.textContent = `${milestones.length} Landmarks`;
+    countEl.textContent = `${milestones.length} Landmark${milestones.length === 1 ? '' : 's'}`;
   }
   container.style.setProperty('--milestone-cols', String(Math.max(1, milestones.length)));
+  const isMonthly = scheduleView === 'monthly';
 
   container.innerHTML = milestones
     .map(
@@ -285,7 +334,7 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
           <span class="milestone-tag-glyph" aria-hidden="true">${m.icon}</span>
           <span class="milestone-tag-label">${escapeHtml(m.title)}</span>
         </span>
-        <span class="milestone-card-target">Yr ${m.year}</span>
+        <span class="milestone-card-target">${isMonthly ? `#${m.monthIndex}` : `Yr ${m.year}`}</span>
       </div>
       <div class="milestone-card-date">${escapeHtml(m.dateStr)}</div>
       <div class="milestone-card-metric">
@@ -300,6 +349,78 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
     </div>`
     )
     .join('');
+};
+
+const syncHeroChips = (currentVal: number, baseVal: number, maxVal: number) => {
+  const chips: Array<[string, number]> = [
+    ['chip-base', baseVal],
+    ['chip-plus-10', Math.min(maxVal, round2(baseVal * 1.1))],
+    ['chip-plus-25', Math.min(maxVal, round2(baseVal * 1.25))],
+    ['chip-double', maxVal]
+  ];
+  for (const [id, target] of chips) {
+    const el = $<HTMLButtonElement>(id);
+    if (el) {
+      const active = baseVal > 0 && Math.abs(currentVal - target) < 0.05;
+      el.classList.toggle('active', active);
+      el.setAttribute('aria-pressed', String(active));
+    }
+  }
+};
+
+const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
+  const inp = a.inputs;
+  const c = inp.country;
+  const money = (x: number, cents = false) => formatMoney(x, c, cents);
+  const { plan } = a;
+  const isMonthly = scheduleView === 'monthly';
+  const includeDay = plan.periodsPerYear > 12;
+
+  $('schedule-body').innerHTML = isMonthly
+    ? plan.rows
+        .map((r) => {
+          const m = formatShortDate(r.date, c, includeDay);
+          const y = r.date.getFullYear();
+          const y2 = String(y).slice(-2);
+          const matching = milestones.filter((ms) => ms.monthIndex === r.n);
+          const primaryMilestone = matching[0];
+          const rowClass = primaryMilestone ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
+          const badges = matching.map((ms) => ms.badgeDesktop).join('');
+          const pips = matching.map((ms) => ms.pipMobile).join('');
+          return `<tr class="${rowClass}" id="schedule-row-month-${r.n}">
+            <td class="col-num">${r.n}</td>
+            <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span>${badges ? `<span class="milestone-badge-desktop">${badges}</span>` : ''}${pips ? `<span class="milestone-pip-mobile">${pips}</span>` : ''}</td>
+            <td class="col-payment">${money(r.scheduled + r.extra, false)}</td>
+            <td class="col-interest">${money(r.interest, false)}</td>
+            <td class="col-principal">${money(r.principal, false)}</td>
+            <td class="col-extra">${r.extra > 0 ? money(r.extra, false) : '—'}</td>
+            <td class="col-balance">${money(r.balance, false)}</td>
+          </tr>`;
+        })
+        .join('')
+    : a.years
+        .map((y) => {
+          const matching = milestones.filter((ms) => ms.year === y.year);
+          const badges = matching.map((ms) => ms.badgeDesktop);
+          const pips = matching.map((ms) => ms.pipMobile);
+          const primaryMilestone = matching[0];
+          const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
+          const y2 = String(y.endDate.getFullYear()).slice(-2);
+
+          return `<tr class="${rowClass}" id="schedule-row-year-${y.year}">
+            <td class="col-year">
+              <span class="year-num">${y.year}</span>
+              <span class="year-date muted"><span class="date-yr-full">${y.endDate.getFullYear()}</span><span class="date-yr-short">'${y2}</span></span>
+              <span class="milestone-badge-desktop">${badges.join('')}</span>
+              <span class="milestone-pip-mobile">${pips.join('')}</span>
+            </td>
+            <td class="col-interest">${money(y.interest)}</td>
+            <td class="col-principal">${money(y.principal)}</td>
+            <td class="col-extra">${y.extra > 0 ? money(y.extra) : '—'}</td>
+            <td class="col-balance">${money(y.endBalance)}</td>
+          </tr>`;
+        })
+        .join('');
 };
 
 // ---------- rendering ----------
@@ -358,17 +479,18 @@ const render = () => {
     $('out-payment').textContent = money(plan.regularPayment, true);
     if (showEditable) {
       const customInput = $<HTMLInputElement>('in-payment-increase');
+      const currentVal =
+        inp.customPayment && inp.customPayment >= a.basePayment
+          ? clamp(inp.customPayment, a.basePayment, a.maxPayment)
+          : a.basePayment;
       if (customInput) {
         customInput.min = String(a.basePayment);
         customInput.max = String(a.maxPayment);
-        const currentVal =
-          inp.customPayment && inp.customPayment >= a.basePayment
-            ? clamp(inp.customPayment, a.basePayment, a.maxPayment)
-            : a.basePayment;
         setField(customInput, fmtNum(currentVal));
       }
       $('hero-min-payment').textContent = money(a.basePayment, true);
       $('hero-max-payment').textContent = money(a.maxPayment, true);
+      syncHeroChips(currentVal, a.basePayment, a.maxPayment);
     }
   } else {
     $('out-payment').textContent = money(0);
@@ -381,7 +503,34 @@ const render = () => {
   }
   if (hasLoan && inp.extraMonthly > 0) sub.push(`plus ${money(inp.extraMonthly)}/month extra`);
   if (!hasLoan) sub.push('Enter a loan amount to see your payment.');
-  $('out-hero-sub').textContent = sub.join(' · ');
+  const heroSubEl = $('out-hero-sub');
+  heroSubEl.textContent = sub.join(' · ');
+
+  // Print statement parameters summary (visible in @media print)
+  let printMetaEl = document.getElementById('out-print-meta');
+  if (!printMetaEl && heroSubEl.parentElement) {
+    printMetaEl = document.createElement('div');
+    printMetaEl.id = 'out-print-meta';
+    printMetaEl.className = 'hero-print-meta';
+    heroSubEl.parentElement.appendChild(printMetaEl);
+  }
+  if (printMetaEl) {
+    const metaParts: string[] = [];
+    if (inp.mode === 'purchase') {
+      const downPct = inp.homePrice > 0 ? ((inp.downPayment / inp.homePrice) * 100).toFixed(1) : '0';
+      metaParts.push(`Home price: ${money(inp.homePrice)}`, `Down payment: ${money(inp.downPayment)} (${downPct}%)`);
+    } else {
+      metaParts.push(`Balance: ${money(inp.currentBalance)}`);
+    }
+    metaParts.push(
+      `Rate: ${inp.annualRate}% (${REGIONS[c].compounding})`,
+      `Amortization: ${inp.amortizationYears} yrs`,
+      `Frequency: ${FREQUENCIES[inp.frequency].label}`,
+      `Start: ${inp.startDate}`
+    );
+    if (inp.annualLumpSum > 0) metaParts.push(`Annual lump sum: ${money(inp.annualLumpSum)}/yr`);
+    printMetaEl.textContent = metaParts.join(' · ');
+  }
 
   // Stats
   $('out-loan').textContent = money(a.loanAmount);
@@ -427,6 +576,7 @@ const render = () => {
       onApply: (action, chartId) => {
         const previousState = { ...state };
         const previousEntry = { ...entryStrategy };
+        const previousRatio = paymentIncreaseRatio;
         const fromStrategies = chartId === 'strategies';
         update(action.patch, fromStrategies);
         syncForm();
@@ -434,7 +584,7 @@ const render = () => {
           actionLabel: 'Undo',
           onAction: () => {
             entryStrategy = previousEntry;
-            update(previousState, true);
+            update(previousState, true, previousRatio);
             syncForm();
             showToast('Reverted strategy change');
           }
@@ -456,12 +606,13 @@ const render = () => {
   // Monthly housing cost
   const costRows: Array<[string, number]> = [
     ['Mortgage payment', a.monthlyEquivalent],
+    ['Extra monthly payment', inp.extraMonthly],
     [REGIONS[c].propertyTaxLabel, inp.propertyTaxYearly / 12],
     ['Home insurance', inp.homeInsuranceYearly / 12],
     [REGIONS[c].feesLabel, inp.feesMonthly],
     ['PMI (until it cancels)', a.insurance.pmiMonthly]
   ];
-  const hasCosts = hasLoan && costRows.slice(1).some(([, v]) => v > 0);
+  const hasCosts = hasLoan && costRows.slice(2).some(([, v]) => v > 0);
   $('monthly-cost').hidden = !hasCosts;
   if (hasCosts) {
     $('monthly-cost-list').innerHTML =
@@ -526,53 +677,16 @@ const render = () => {
 
   // Calculate & render the Prada Milestone Horizons Showcase
   const milestones = buildMilestones(a);
+  lastMilestones = milestones;
   renderMilestonesShowcase(milestones);
 
-  $('schedule-body').innerHTML = isMonthly
-    ? plan.rows
-        .map((r) => {
-          const m =
-            plan.periodsPerYear > 12
-              ? r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short', day: 'numeric' })
-              : r.date.toLocaleDateString(REGIONS[c].locale, { month: 'short' });
-          const y = r.date.getFullYear();
-          const y2 = String(y).slice(-2);
-          const matchedMilestone = milestones.find((ms) => ms.monthIndex === r.n);
-          const rowClass = matchedMilestone ? `milestone-row row-milestone-${matchedMilestone.key}` : '';
-          return `<tr class="${rowClass}" id="schedule-row-month-${r.n}">
-            <td class="col-num">${r.n}</td>
-            <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span></td>
-            <td class="col-payment">${money(r.scheduled + r.extra, false)}</td>
-            <td class="col-interest">${money(r.interest, false)}</td>
-            <td class="col-principal">${money(r.principal, false)}</td>
-            <td class="col-extra">${r.extra > 0 ? money(r.extra, false) : '—'}</td>
-            <td class="col-balance">${money(r.balance, false)}</td>
-          </tr>`;
-        })
-        .join('')
-    : a.years
-        .map((y) => {
-          const matching = milestones.filter((ms) => ms.year === y.year);
-          const badges = matching.map((ms) => ms.badgeDesktop);
-          const pips = matching.map((ms) => ms.pipMobile);
-          const primaryMilestone = matching[0];
-          const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
-          const y2 = String(y.endDate.getFullYear()).slice(-2);
-
-          return `<tr class="${rowClass}" id="schedule-row-year-${y.year}">
-            <td class="col-year">
-              <span class="year-num">${y.year}</span>
-              <span class="year-date muted"><span class="date-yr-full">${y.endDate.getFullYear()}</span><span class="date-yr-short">'${y2}</span></span>
-              <span class="milestone-badge-desktop">${badges.join('')}</span>
-              <span class="milestone-pip-mobile">${pips.join('')}</span>
-            </td>
-            <td class="col-interest">${money(y.interest)}</td>
-            <td class="col-principal">${money(y.principal)}</td>
-            <td class="col-extra">${y.extra > 0 ? money(y.extra) : '—'}</td>
-            <td class="col-balance">${money(y.endBalance)}</td>
-          </tr>`;
-        })
-        .join('');
+  const scheduleDetails = $<HTMLDetailsElement>('schedule-details');
+  if (!scheduleDetails || scheduleDetails.open) {
+    renderScheduleRows(a, milestones);
+    scheduleDirty = false;
+  } else {
+    scheduleDirty = true;
+  }
 };
 
 // ---------- CSV & Share ----------
@@ -730,7 +844,7 @@ const bind = () => {
     b.addEventListener('click', () => update({ mode: b.dataset.mode as MortgageInputs['mode'] }))
   );
 
-  // Schedule view switch
+  // Schedule view switch & lazy-open rendering
   document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation(); // prevent toggling the parent <details> summary
@@ -742,6 +856,16 @@ const bind = () => {
     });
   });
 
+  const scheduleDetailsEl = $<HTMLDetailsElement>('schedule-details');
+  if (scheduleDetailsEl) {
+    scheduleDetailsEl.addEventListener('toggle', () => {
+      if (scheduleDetailsEl.open && scheduleDirty && lastAnalysis) {
+        renderScheduleRows(lastAnalysis, lastMilestones);
+        scheduleDirty = false;
+      }
+    });
+  }
+
   // Payment Increase Privilege
   const toggleEl = $<HTMLInputElement>('toggle-payment-increase');
   if (toggleEl) {
@@ -752,7 +876,7 @@ const bind = () => {
         const baseVal = lastAnalysis.basePayment;
         const maxVal = lastAnalysis.maxPayment;
         if (!state.customPayment || state.customPayment < baseVal || state.customPayment > maxVal) {
-          patch.customPayment = baseVal;
+          patch.customPayment = round2(clamp(baseVal * paymentIncreaseRatio, baseVal, maxVal));
         }
       }
       update(patch);
@@ -773,7 +897,7 @@ const bind = () => {
       if (Number.isFinite(val)) {
         if (lastAnalysis && val > lastAnalysis.maxPayment) {
           customInput.value = fmtNum(lastAnalysis.maxPayment);
-          update({ customPayment: lastAnalysis.maxPayment });
+          update({ customPayment: lastAnalysis.maxPayment }, false, 2);
         } else {
           update({ customPayment: val });
         }
@@ -802,29 +926,31 @@ const bind = () => {
     });
   }
 
-  const applyChip = (calc: (base: number, max: number) => number) => {
+  const applyChip = (ratio: number, calc: (base: number, max: number) => number) => {
     if (lastAnalysis) {
       const val = calc(lastAnalysis.basePayment, lastAnalysis.maxPayment);
       const input = $<HTMLInputElement>('in-payment-increase');
       if (input) setField(input, fmtNum(val));
-      update({ customPayment: val });
+      update({ customPayment: val }, false, ratio);
     }
   };
 
-  $('chip-base')?.addEventListener('click', () => applyChip((base) => base));
+  $('chip-base')?.addEventListener('click', () => applyChip(1, (base) => base));
   $('chip-plus-10')?.addEventListener('click', () =>
-    applyChip((base, max) => Math.min(max, Math.round(base * 1.1 * 100) / 100))
+    applyChip(1.1, (base, max) => Math.min(max, round2(base * 1.1)))
   );
   $('chip-plus-25')?.addEventListener('click', () =>
-    applyChip((base, max) => Math.min(max, Math.round(base * 1.25 * 100) / 100))
+    applyChip(1.25, (base, max) => Math.min(max, round2(base * 1.25)))
   );
-  $('chip-double')?.addEventListener('click', () => applyChip((_, max) => max));
+  $('chip-double')?.addEventListener('click', () => applyChip(2, (_, max) => max));
 
   // Reset
   $('btn-reset').addEventListener('click', () => {
     const previousState = { ...state };
     const previousEntry = { ...entryStrategy };
+    const previousRatio = paymentIncreaseRatio;
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };
+    paymentIncreaseRatio = 1;
     entryStrategy = extractStrategyInputs(state);
     clearUrlQueryIfPresent();
     save();
@@ -834,8 +960,9 @@ const bind = () => {
       actionLabel: 'Undo',
       onAction: () => {
         entryStrategy = previousEntry;
-        update(previousState, true);
+        update(previousState, true, previousRatio);
         syncForm();
+        syncCostsSectionOpen();
         showToast('Restored previous parameters');
       }
     });
@@ -893,6 +1020,10 @@ const prepareForPrint = () => {
     scheduleWasClosedBeforePrint = true;
     details.open = true;
   }
+  if (scheduleDirty && lastAnalysis) {
+    renderScheduleRows(lastAnalysis, lastMilestones);
+    scheduleDirty = false;
+  }
   if (!printPrepared) {
     printPrepared = true;
     setPrintLightMode(true);
@@ -916,6 +1047,7 @@ const restoreAfterPrint = () => {
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
   syncForm();
+  syncCostsSectionOpen();
   bind();
   render();
 });

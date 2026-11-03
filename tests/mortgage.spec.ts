@@ -12,6 +12,7 @@ import {
   serializeUrlInputs
 } from '../src/core/mortgage';
 import { DEFAULT_INPUTS } from '../src/core/regions';
+import { formatMoney, formatMonthYear, formatShortDate } from '../src/core/format';
 import { MortgageInputs } from '../src/core/types';
 
 const base = (patch: Partial<MortgageInputs> = {}): MortgageInputs => ({
@@ -274,17 +275,29 @@ describe('existing mortgage mode', () => {
 });
 
 describe('housing costs', () => {
-  it('adds tax, insurance and fees to the monthly cost but not to the loan', () => {
-    const a = analyzeMortgage(base({ propertyTaxYearly: 6000, homeInsuranceYearly: 1200, feesMonthly: 300 }));
+  it('adds tax, insurance, fees and extraMonthly to the monthly cost but not to the loan', () => {
+    const a = analyzeMortgage(
+      base({ propertyTaxYearly: 6000, homeInsuranceYearly: 1200, feesMonthly: 300, extraMonthly: 250 })
+    );
     const plain = analyzeMortgage(base());
-    expect(a.monthlyHousingCost).toBeCloseTo(a.monthlyEquivalent + 500 + 100 + 300, 2);
-    expect(a.plan.totalInterest).toBe(plain.plan.totalInterest);
+    expect(a.monthlyHousingCost).toBeCloseTo(a.monthlyEquivalent + 250 + 500 + 100 + 300, 2);
+    expect(a.loanAmount).toBe(plain.loanAmount);
   });
 
   it('a zero entered by the user stays zero', () => {
     const a = analyzeMortgage(base({ propertyTaxYearly: 0, pmiRate: 0, country: 'US', downPayment: 20_000 }));
     expect(a.inputs.propertyTaxYearly).toBe(0);
     expect(a.insurance.kind).toBe('none');
+  });
+
+  it('formats money and dates consistently using cached Intl formatters', () => {
+    const d = new Date(2026, 10, 15);
+    expect(formatMoney(1234.56, 'CA', false)).toContain('1,235');
+    expect(formatMoney(1234.56, 'CA', true)).toContain('1,234.56');
+    expect(formatMonthYear(d, 'US')).toContain('2026');
+    expect(formatMonthYear(null, 'US')).toBe('—');
+    expect(formatShortDate(d, 'CA', false)).toContain('Nov');
+    expect(formatShortDate(d, 'CA', true)).toContain('15');
   });
 });
 

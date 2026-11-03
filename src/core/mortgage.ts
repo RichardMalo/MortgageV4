@@ -515,6 +515,7 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
   const monthlyEquivalent = round2((plan.regularPayment * plan.periodsPerYear) / 12);
   const monthlyHousingCost = round2(
     monthlyEquivalent +
+      inputs.extraMonthly +
       inputs.propertyTaxYearly / 12 +
       inputs.homeInsuranceYearly / 12 +
       inputs.feesMonthly +
