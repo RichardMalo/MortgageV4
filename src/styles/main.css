@@ -2128,11 +2128,6 @@ table[data-view="monthly"] .col-balance {
   width: 17%;
 }
 
-#schedule-body tr {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 26px;
-}
-
 tbody tr:nth-child(even) {
   background: var(--input);
 }
@@ -2531,6 +2526,14 @@ select:focus-visible {
   .milestone-pip-mobile {
     display: inline-flex !important;
     align-items: center;
+    gap: 2px;
+    margin-left: 2px;
+    vertical-align: middle;
+  }
+
+  .milestone-pip {
+    display: inline-flex;
+    align-items: center;
     justify-content: center;
     width: 14px;
     height: 14px;
@@ -2538,8 +2541,6 @@ select:focus-visible {
     font-size: 0.56rem;
     font-weight: 700;
     line-height: 1;
-    margin-left: 2px;
-    vertical-align: middle;
   }
 
   .pip-renewal {
@@ -2677,6 +2678,21 @@ select:focus-visible {
     margin-bottom: 16px;
     padding: 16px !important;
     background: #ffffff !important;
+  }
+
+  .chart-carousel-viewport {
+    overflow: visible !important;
+    display: block !important;
+  }
+
+  .chart-slide:not(.active) {
+    display: none !important;
+  }
+
+  .chart-slide.active {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
   }
 
   .hero {

@@ -266,6 +266,49 @@ describe('Scenario & Decision Math Engine', () => {
 
       expect(stratTip.crossYears!).toBeLessThan(baseTip.crossYears!);
     });
+
+    it('distinguishes true Day-1 crossover (payment #1) from mid-Year-1 crossover', () => {
+      // Mid-Year-1 crossover: payment #1 has principal < interest, but Year 1 average crosses due to payment progression / lump sum
+      const midYear1 = analyzeMortgage({
+        country: 'CA',
+        mode: 'existing',
+        currentBalance: 400_000,
+        annualRate: 7,
+        amortizationYears: 20,
+        frequency: 'monthly',
+        annualLumpSum: 25_000
+      });
+      const firstRow = midYear1.plan.rows[0]!;
+      expect(firstRow.principal + firstRow.extra).toBeLessThan(firstRow.interest);
+
+      const midTip = tippingPoint(midYear1.plan, midYear1.inputs.startDate);
+      expect(midTip.crossYear).toBe(1);
+      expect(midTip.crossRowIndex).toBeGreaterThan(1);
+      expect(midTip.crossYears).toBeGreaterThan(0);
+
+      const midMilestones = buildMilestones(midYear1);
+      const midTipMilestone = midMilestones.find((m) => m.key === 'tipping');
+      expect(midTipMilestone?.descText).toBe(
+        'Equity inflection point: payments build equity faster than bank interest.'
+      );
+
+      // True Day-1 crossover: payment #1 already has principal >= interest
+      const day1 = analyzeMortgage({
+        country: 'CA',
+        mode: 'existing',
+        currentBalance: 100_000,
+        annualRate: 3,
+        amortizationYears: 5,
+        frequency: 'monthly'
+      });
+      const day1Tip = tippingPoint(day1.plan, day1.inputs.startDate);
+      expect(day1Tip.crossRowIndex).toBe(1);
+      expect(day1Tip.crossYears).toBe(0);
+
+      const day1Milestones = buildMilestones(day1);
+      const day1TipMilestone = day1Milestones.find((m) => m.key === 'tipping');
+      expect(day1TipMilestone?.descText).toContain('From Day 1');
+    });
   });
 
   describe('costOfWaiting', () => {

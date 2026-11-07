@@ -3,7 +3,15 @@
  * One form in, one analysis out. All math lives in ./core/mortgage.ts.
  */
 
-import { analyzeMortgage, clamp, parseUrlInputs, round2, sanitizeInputs, serializeUrlInputs } from './core/mortgage.js';
+import {
+  analyzeMortgage,
+  canadianMinimumDown,
+  clamp,
+  parseUrlInputs,
+  round2,
+  sanitizeInputs,
+  serializeUrlInputs
+} from './core/mortgage.js';
 import { DEFAULT_INPUTS, FREQUENCIES, REGIONS, defaultStartDate } from './core/regions.js';
 import { formatDuration, formatMoney, formatMonthYear, formatShortDate, isoDate } from './core/format.js';
 import { MilestoneData, StrategyInputs, buildMilestones, extractStrategyInputs } from './core/scenarios.js';
@@ -63,6 +71,7 @@ const computeRatioFromState = (s: MortgageInputs): number => {
 let state: MortgageInputs = loadState();
 let paymentIncreaseRatio: number = computeRatioFromState(state);
 let entryStrategy: StrategyInputs = extractStrategyInputs(state);
+let entryPaymentIncreaseRatio: number = paymentIncreaseRatio;
 let scheduleView: 'yearly' | 'monthly' = 'yearly';
 let lastAnalysis: Analysis | null = null;
 let lastMilestones: MilestoneData[] = [];
@@ -98,13 +107,20 @@ const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, e
       state.customPayment = round2(
         clamp(prelim.basePayment * paymentIncreaseRatio, prelim.basePayment, prelim.maxPayment)
       );
-      if (!STRATEGY_KEYS.some((k) => k in patch) && entryStrategy.paymentIncreaseEnabled) {
-        entryStrategy.customPayment = state.customPayment;
-      }
     }
   }
-  if (!preserveEntryStrategy && STRATEGY_KEYS.some((k) => k in patch)) {
+  const hasStrategyKey = STRATEGY_KEYS.some((k) => k in patch);
+  if (!hasStrategyKey && entryStrategy.paymentIncreaseEnabled) {
+    const entryPrelim = analyzeMortgage({ ...state, ...entryStrategy });
+    if (entryPrelim.basePayment > 0) {
+      entryStrategy.customPayment = round2(
+        clamp(entryPrelim.basePayment * entryPaymentIncreaseRatio, entryPrelim.basePayment, entryPrelim.maxPayment)
+      );
+    }
+  }
+  if (!preserveEntryStrategy && hasStrategyKey) {
     entryStrategy = extractStrategyInputs(state);
+    entryPaymentIncreaseRatio = paymentIncreaseRatio;
   }
   clearUrlQueryIfPresent();
   save();
@@ -196,7 +212,7 @@ const fmtNum = (n: number) => (Number.isFinite(n) ? String(Math.round(n * 100) /
 
 const syncDownPct = () => {
   const pct = state.homePrice > 0 ? (state.downPayment / state.homePrice) * 100 : 0;
-  const rounded = Math.round(pct * 10) / 10;
+  const rounded = Math.round(pct * 100) / 100;
   setField($<HTMLInputElement>('in-down-pct'), fmtNum(rounded));
 
   // Sync active state of down payment micro-pills
@@ -401,8 +417,8 @@ const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
     : a.years
         .map((y) => {
           const matching = milestones.filter((ms) => ms.year === y.year);
-          const badges = matching.map((ms) => ms.badgeDesktop);
-          const pips = matching.map((ms) => ms.pipMobile);
+          const badges = matching.map((ms) => ms.badgeDesktop).join('');
+          const pips = matching.map((ms) => ms.pipMobile).join('');
           const primaryMilestone = matching[0];
           const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
           const y2 = String(y.endDate.getFullYear()).slice(-2);
@@ -411,8 +427,8 @@ const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
             <td class="col-year">
               <span class="year-num">${y.year}</span>
               <span class="year-date muted"><span class="date-yr-full">${y.endDate.getFullYear()}</span><span class="date-yr-short">'${y2}</span></span>
-              <span class="milestone-badge-desktop">${badges.join('')}</span>
-              <span class="milestone-pip-mobile">${pips.join('')}</span>
+              ${badges ? `<span class="milestone-badge-desktop">${badges}</span>` : ''}
+              ${pips ? `<span class="milestone-pip-mobile">${pips}</span>` : ''}
             </td>
             <td class="col-interest">${money(y.interest)}</td>
             <td class="col-principal">${money(y.principal)}</td>
@@ -443,7 +459,10 @@ const render = () => {
       const ltv = ((inp.homePrice - inp.downPayment) / inp.homePrice) * 100;
       let status = 'Conventional';
       if (ltv > 80) {
-        status = c === 'CA' ? 'Insured (CMHC)' : c === 'US' ? 'PMI Required' : 'High LTV';
+        if (a.insurance.kind === 'cmhc') status = 'Insured (CMHC)';
+        else if (a.insurance.kind === 'pmi') status = 'PMI Required';
+        else if (c === 'CA' && inp.downPayment + 0.5 < canadianMinimumDown(inp.homePrice)) status = 'Below Min Down';
+        else status = 'High LTV';
       }
       ltvBadge.textContent = `${ltv.toFixed(1)}% LTV · ${status}`;
     } else {
@@ -576,6 +595,7 @@ const render = () => {
       onApply: (action, chartId) => {
         const previousState = { ...state };
         const previousEntry = { ...entryStrategy };
+        const previousEntryRatio = entryPaymentIncreaseRatio;
         const previousRatio = paymentIncreaseRatio;
         const fromStrategies = chartId === 'strategies';
         update(action.patch, fromStrategies);
@@ -584,6 +604,7 @@ const render = () => {
           actionLabel: 'Undo',
           onAction: () => {
             entryStrategy = previousEntry;
+            entryPaymentIncreaseRatio = previousEntryRatio;
             update(previousState, true, previousRatio);
             syncForm();
             showToast('Reverted strategy change');
@@ -773,6 +794,7 @@ const bind = () => {
     });
     el.addEventListener('blur', () => {
       state = sanitizeInputs(state);
+      save();
       syncForm();
       render();
       resetMobileViewportOffset();
@@ -782,8 +804,9 @@ const bind = () => {
   // Down payment percentage input
   const downPctInput = $<HTMLInputElement>('in-down-pct');
   downPctInput.addEventListener('input', (e) => {
-    const pct = parseFloat((e.target as HTMLInputElement).value);
-    const down = Math.round((state.homePrice * (Number.isFinite(pct) ? pct : 0)) / 100);
+    const rawPct = parseFloat((e.target as HTMLInputElement).value);
+    const pct = Number.isFinite(rawPct) ? clamp(rawPct, 0, 100) : 0;
+    const down = Math.round((state.homePrice * pct) / 100);
     update({ downPayment: down });
     setField($<HTMLInputElement>('in-down'), String(down));
     syncDownPct();
@@ -796,6 +819,7 @@ const bind = () => {
   });
   downPctInput.addEventListener('blur', () => {
     state = sanitizeInputs(state);
+    save();
     syncForm();
     render();
     resetMobileViewportOffset();
@@ -839,24 +863,57 @@ const bind = () => {
     setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate));
   });
 
-  // Mode switcher
-  document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) =>
-    b.addEventListener('click', () => update({ mode: b.dataset.mode as MortgageInputs['mode'] }))
-  );
-
-  // Schedule view switch & lazy-open rendering
-  document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation(); // prevent toggling the parent <details> summary
-      const view = btn.dataset.scheduleView as 'yearly' | 'monthly';
-      if (view && view !== scheduleView) {
-        scheduleView = view;
-        render();
+  // Mode switcher (click + WAI-ARIA radiogroup keyboard navigation)
+  const modeButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.seg-btn'));
+  modeButtons.forEach((b, idx) => {
+    b.addEventListener('click', () => update({ mode: b.dataset.mode as MortgageInputs['mode'] }));
+    b.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const nextBtn = modeButtons[(idx + 1) % modeButtons.length];
+        if (nextBtn) {
+          nextBtn.focus();
+          update({ mode: nextBtn.dataset.mode as MortgageInputs['mode'] });
+        }
       }
     });
   });
 
+  // Schedule view switch & lazy-open rendering
   const scheduleDetailsEl = $<HTMLDetailsElement>('schedule-details');
+  document.querySelector<HTMLElement>('.schedule-switch')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+  const schedButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn'));
+  schedButtons.forEach((btn, idx) => {
+    const selectScheduleView = (view: 'yearly' | 'monthly') => {
+      if (scheduleDetailsEl && !scheduleDetailsEl.open) {
+        scheduleDetailsEl.open = true;
+      }
+      if (view !== scheduleView) {
+        scheduleView = view;
+        render();
+      }
+    };
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation(); // prevent toggling the parent <details> summary
+      const view = btn.dataset.scheduleView as 'yearly' | 'monthly';
+      if (view) selectScheduleView(view);
+    });
+    btn.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+        e.preventDefault();
+        e.stopPropagation();
+        const nextBtn = schedButtons[(idx + 1) % schedButtons.length];
+        const view = nextBtn?.dataset.scheduleView as 'yearly' | 'monthly' | undefined;
+        if (nextBtn && view) {
+          nextBtn.focus();
+          selectScheduleView(view);
+        }
+      }
+    });
+  });
   if (scheduleDetailsEl) {
     scheduleDetailsEl.addEventListener('toggle', () => {
       if (scheduleDetailsEl.open && scheduleDirty && lastAnalysis) {
@@ -948,9 +1005,11 @@ const bind = () => {
   $('btn-reset').addEventListener('click', () => {
     const previousState = { ...state };
     const previousEntry = { ...entryStrategy };
+    const previousEntryRatio = entryPaymentIncreaseRatio;
     const previousRatio = paymentIncreaseRatio;
     state = { ...DEFAULT_INPUTS, country: state.country, startDate: defaultStartDate() };
     paymentIncreaseRatio = 1;
+    entryPaymentIncreaseRatio = 1;
     entryStrategy = extractStrategyInputs(state);
     clearUrlQueryIfPresent();
     save();
@@ -960,6 +1019,7 @@ const bind = () => {
       actionLabel: 'Undo',
       onAction: () => {
         entryStrategy = previousEntry;
+        entryPaymentIncreaseRatio = previousEntryRatio;
         update(previousState, true, previousRatio);
         syncForm();
         syncCostsSectionOpen();
@@ -1046,6 +1106,7 @@ const restoreAfterPrint = () => {
 
 window.addEventListener('DOMContentLoaded', () => {
   initTheme();
+  save();
   syncForm();
   syncCostsSectionOpen();
   bind();

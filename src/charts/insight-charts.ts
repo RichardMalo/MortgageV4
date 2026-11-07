@@ -255,11 +255,13 @@ export const keptChart: InsightChart = {
       // Total kept label at the right edge
       if (a.interestSaved >= 1) {
         const yMid = (g.getY(a.baseline.totalInterest) + g.getY(a.plan.totalInterest)) / 2;
+        const rightX = dims.padding.left + dims.plotWidth - 50;
+        const pillY = payoffX > rightX - 65 ? Math.max(dims.padding.top + 38, yMid + 9) : yMid + 9;
         drawPill(
           ctx,
           `+${compact(a, a.interestSaved)} kept`,
-          dims.padding.left + dims.plotWidth - 50,
-          yMid + 9,
+          rightX,
+          pillY,
           colors.extraColor,
           '#ffffff',
           dims
@@ -607,13 +609,14 @@ export const extraChart: InsightChart = {
     const p = d.sweep?.points[i];
     if (!p) return '';
     const overCap = d.sweep!.capExtraMonthly !== null && p.extraMonthly > d.sweep!.capExtraMonthly + 0.5;
+    const isCurrentExtra = Math.abs(p.extraMonthly - a.inputs.extraMonthly) < 0.05;
     return `
       <div class="tip-header">${p.extraMonthly > 0 ? `+${money(a, p.extraMonthly)} / month extra` : 'No extra payment'}</div>
       <div class="tip-row good"><span>Interest saved:</span> <strong>${money(a, p.interestSaved)}</strong></div>
       <div class="tip-row plan"><span>Time saved:</span> <strong>${formatDuration(p.monthsSaved)}</strong></div>
       <div class="tip-row muted"><span>Debt-free:</span> <strong>${monthYear(a, p.payoffDate)}</strong></div>
       ${overCap ? `<div class="tip-row warn"><span>⚠ May exceed your lender's penalty-free limit</span></div>` : ''}
-      ${tipCta('Click to use this amount')}
+      ${tipCta(isCurrentExtra ? 'Current extra monthly payment' : 'Click to use this amount')}
     `;
   },
 
@@ -637,7 +640,7 @@ export const extraChart: InsightChart = {
 
   apply(i, a, d) {
     const p = d.sweep?.points[i];
-    if (!p) return null;
+    if (!p || Math.abs(p.extraMonthly - a.inputs.extraMonthly) < 0.05) return null;
     return {
       patch: { extraMonthly: p.extraMonthly },
       message:
@@ -653,6 +656,23 @@ export const extraChart: InsightChart = {
 const STRAT_PADDING: ChartPadding = { top: 4, right: 12, bottom: 4, left: 12 };
 
 const stratRowH = (dims: ChartDims, n: number) => dims.plotHeight / Math.max(1, n);
+
+const isSameActiveStrategy = (a: Analysis, patch: Partial<MortgageInputs> | null): boolean => {
+  if (!patch) return true;
+  const freq = patch.frequency ?? 'monthly';
+  const extra = patch.extraMonthly ?? 0;
+  const lumpVal = patch.annualLumpSum ?? 0;
+  const incVal =
+    patch.paymentIncreaseEnabled && patch.customPayment
+      ? Math.max(0, patch.customPayment - a.baseline.regularPayment)
+      : 0;
+  return (
+    a.inputs.frequency === freq &&
+    Math.abs(a.inputs.extraMonthly - extra) < 0.05 &&
+    Math.abs(a.inputs.annualLumpSum - lumpVal) < 0.5 &&
+    Math.abs(a.paymentIncrease - incVal) < 0.05
+  );
+};
 
 export const strategiesChart: InsightChart = {
   id: 'strategies',
@@ -732,13 +752,11 @@ export const strategiesChart: InsightChart = {
         ctx.fillText(text, tagX + 5, textY);
         tagX += w + 6;
       };
-      if (wide) {
-        if (s.isCurrent && s.badge) tag(s.badge, colors.accentColor);
-        if (!s.isCurrent && s === topPenaltyFree) tag('Most savings', colors.extraColor);
-        if (!s.isCurrent && bestValue && s === bestValue) tag('Best value', colors.warnColor);
-        if (!s.isCurrent && s.isApplied) tag('Applied', colors.accentColor);
-        if (s.exceedsCap) tag('Over cap', colors.warnColor);
-      }
+      if (s.isCurrent && s.badge) tag(s.badge, colors.accentColor);
+      if (!s.isCurrent && s.isApplied) tag('Applied', colors.accentColor);
+      if (!s.isCurrent && s === topPenaltyFree) tag('Most savings', colors.extraColor);
+      if (!s.isCurrent && bestValue && s === bestValue) tag('Best value', colors.warnColor);
+      if (s.exceedsCap) tag('Over cap', colors.warnColor);
 
       // Track + bar
       ctx.fillStyle = colors.gridColor;
@@ -771,11 +789,12 @@ export const strategiesChart: InsightChart = {
   tooltip(i, a, d) {
     const s = d.strategies[i];
     if (!s) return '';
+    const alreadyActive = !s.isCurrent && (s.isApplied || isSameActiveStrategy(a, s.patch));
     const ctaText = s.isCurrent
       ? s.patch
         ? 'Click to return to your current strategy'
         : 'This is your current strategy'
-      : s.isApplied
+      : alreadyActive
         ? 'Currently applied — click another bar to compare'
         : a.hasStrategy
           ? 'Click to switch strategy (replaces current extras)'
@@ -820,9 +839,9 @@ export const strategiesChart: InsightChart = {
   isClickable: (_a, d) => d.strategies.length > 0,
   itemCount: (_a, d) => d.strategies.length,
 
-  apply(i, _a, d) {
+  apply(i, a, d) {
     const s = d.strategies[i];
-    if (!s || !s.patch) return null;
+    if (!s || !s.patch || s.isApplied || (!s.isCurrent && isSameActiveStrategy(a, s.patch))) return null;
     const label = s.isCurrent && s.badge ? `${s.label} (${s.badge})` : s.label;
     return { patch: s.patch, message: s.isCurrent ? `Restored: ${label}` : `Applied: ${s.label}` };
   }

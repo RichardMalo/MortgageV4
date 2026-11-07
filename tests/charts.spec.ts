@@ -32,6 +32,14 @@ describe('Chart Utilities', () => {
       const ticks = getNiceTicks(0);
       expect(ticks).toEqual([0]);
     });
+
+    it('produces strictly increasing unique ticks even for very small max values (< 4)', () => {
+      const ticks = getNiceTicks(2, 5);
+      expect(ticks.length).toBeGreaterThanOrEqual(2);
+      for (let i = 1; i < ticks.length; i++) {
+        expect(ticks[i]!).toBeGreaterThan(ticks[i - 1]!);
+      }
+    });
   });
 
   describe('formatCompactMoney', () => {
@@ -134,6 +142,38 @@ describe('Chart Utilities', () => {
       });
       const accelData = computeInsights(accelBiWeekly);
       expect(accelData.waitingIsExample).toBe(false);
+    });
+
+    it('prevents redundant no-op apply actions on extra and strategies charts when clicking already-active points', () => {
+      const base = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'monthly',
+        extraMonthly: 0
+      });
+      const baseData = computeInsights(base);
+
+      // Clicking $0 extra when extraMonthly is already 0 should be a no-op (null)
+      expect(INSIGHT_CHARTS.extra.apply?.(0, base, baseData)).toBeNull();
+      // Clicking a non-zero point should return a valid patch
+      expect(INSIGHT_CHARTS.extra.apply?.(1, base, baseData)).not.toBeNull();
+
+      // When accelerated bi-weekly is already active, clicking its preset bar in Strategy Comparison should be a no-op
+      const accel = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'accelerated-bi-weekly'
+      });
+      const accelData = computeInsights(accel, base.inputs);
+      const accelIdx = accelData.strategies.findIndex((s) => s.id === 'accel-biweekly');
+      expect(accelIdx).toBeGreaterThanOrEqual(0);
+      expect(INSIGHT_CHARTS.strategies.apply?.(accelIdx, accel, accelData)).toBeNull();
     });
   });
 });

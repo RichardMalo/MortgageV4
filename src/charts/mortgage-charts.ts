@@ -49,6 +49,7 @@ type BuiltInChartId = 'balance' | 'lifetime' | 'cashflow';
 interface SlideDef {
   id: string;
   title: string;
+  el: HTMLElement;
   /** Present for registry-driven insight charts; built-in charts use dedicated methods. */
   insight?: InsightChart;
   canvas: HTMLCanvasElement;
@@ -91,7 +92,9 @@ export class MortgageChartsManager {
   private hasLoan = false;
   private resizeObserver: ResizeObserver | null = null;
   private isProgrammaticScrolling = false;
+  private programmaticScrollTimer: ReturnType<typeof setTimeout> | undefined;
   private scrollDebounceTimer: ReturnType<typeof setTimeout> | undefined;
+  private touchHideTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly options: ChartsManagerOptions;
 
   // Hover states
@@ -126,17 +129,21 @@ export class MortgageChartsManager {
       lifetime: this.canvasLifetime,
       cashflow: this.canvasCashFlow
     };
-    this.slides = Array.from(this.viewport.querySelectorAll<HTMLElement>('.chart-slide')).map((el) => {
+    this.slides = Array.from(this.viewport.querySelectorAll<HTMLElement>('.chart-slide')).map((el, idx) => {
       const id = el.dataset.chart || '';
       const title = el.dataset.title || 'Mortgage chart';
+      el.classList.toggle('active', idx === 0);
       const insight = INSIGHT_CHARTS[id];
       if (insight) {
         this.insightHover[id] = null;
-        return { id, title, insight, canvas: this.setupCanvas(`chart-${id}`) };
+        return { id, title, el, insight, canvas: this.setupCanvas(`chart-${id}`) };
       }
       const canvas = builtIn[id as BuiltInChartId];
       if (!canvas) throw new Error(`Unknown chart slide "${id}".`);
-      return { id, title, canvas };
+      return { id, title, el, canvas };
+    });
+    this.tabs.forEach((tab, idx) => {
+      tab.tabIndex = idx === 0 ? 0 : -1;
     });
 
     // Create floating tooltip element
@@ -182,6 +189,17 @@ export class MortgageChartsManager {
     if (keptLegend) keptLegend.hidden = !analysis.hasStrategy;
     const tippingLegend = document.getElementById('legend-tipping-baseline');
     if (tippingLegend) tippingLegend.hidden = !analysis.hasStrategy;
+
+    const hasExtra = analysis.plan.rows.some((r) => r.extra > 0);
+    document
+      .querySelectorAll<HTMLElement>('#chart-legend-cashflow [data-cat="extra"], #chart-legend-lifetime [data-cat="extra"]')
+      .forEach((el) => {
+        el.hidden = !hasExtra;
+      });
+    if (!hasExtra) {
+      if (this.hoverCashFlowCategory === 'extra') this.hoverCashFlowCategory = null;
+      if (this.hoverLifetimeSegment === 'extra') this.hoverLifetimeSegment = null;
+    }
 
     // Only rasterize the visible active slide during rapid input updates; mark off-screen slides dirty
     const activeSlide = this.slides[this.activeIndex];
@@ -309,11 +327,15 @@ export class MortgageChartsManager {
     canvas.addEventListener(
       'touchmove',
       (e) => {
+        clearTimeout(this.touchHideTimer);
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
     );
-    canvas.addEventListener('touchend', () => setTimeout(clear, 1500));
+    canvas.addEventListener('touchend', () => {
+      clearTimeout(this.touchHideTimer);
+      this.touchHideTimer = setTimeout(clear, 1500);
+    });
 
     canvas.addEventListener('click', (e) => {
       if (!chart.apply || !this.currentAnalysis || !this.insightData) return;
@@ -402,7 +424,8 @@ export class MortgageChartsManager {
       a.plan.numPayments / a.plan.periodsPerYear,
       1
     );
-    const maxY = Math.max(a.loanAmount, 1);
+    const yTicks = getNiceTicks(Math.max(a.loanAmount, 1), 5);
+    const maxY = yTicks[yTicks.length - 1]!;
 
     const getX = (years: number) =>
       dims.padding.left + (years / maxYears) * dims.plotWidth;
@@ -410,7 +433,6 @@ export class MortgageChartsManager {
       dims.padding.top + dims.plotHeight - (bal / maxY) * dims.plotHeight;
 
     // Grid lines & axes
-    const yTicks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * maxY);
     drawMoneyGrid(ctx, dims, colors, yTicks, maxY, a.inputs.country);
     drawYearAxis(ctx, dims, colors, maxYears);
 
@@ -490,11 +512,14 @@ export class MortgageChartsManager {
 
       // Baseline dot if strategy
       if (a.hasStrategy && a.baseline.rows.length > 0) {
-        const baseIdx = Math.min(
-          a.baseline.rows.length - 1,
-          Math.round((planRow.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
+        const baseIdx = Math.max(
+          0,
+          Math.min(
+            a.baseline.rows.length - 1,
+            Math.round((planRow.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
+          )
         );
-        if (baseIdx >= 0 && a.baseline.rows[baseIdx]) {
+        if (a.baseline.rows[baseIdx]) {
           const baseRow = a.baseline.rows[baseIdx]!;
           const hYBase = getY(baseRow.balance);
           ctx.fillStyle = colors.baselineColor;
@@ -731,7 +756,8 @@ export class MortgageChartsManager {
       const calYear = yr.endDate.getFullYear();
       const yrText = dims.width < 480 ? `'${String(calYear).slice(-2)}` : String(calYear);
       const step = years.length > 20 ? 5 : years.length > 10 ? 2 : 1;
-      if (idx % step === 0 || idx === years.length - 1) {
+      const nearEnd = idx < years.length - 1 && years.length - 1 - idx < Math.ceil(step / 2);
+      if ((idx % step === 0 && !nearEnd) || idx === years.length - 1 || isHovered) {
         ctx.fillStyle = isHovered ? colors.textColor : colors.mutedColor;
         ctx.font = isHovered
           ? 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
@@ -751,6 +777,9 @@ export class MortgageChartsManager {
     this.activeIndex = bounded;
 
     const currentSlide = this.slides[this.activeIndex];
+    this.slides.forEach((s, idx) => {
+      s.el.classList.toggle('active', idx === this.activeIndex);
+    });
 
     // Update Title
     if (this.titleEl && currentSlide) {
@@ -763,6 +792,7 @@ export class MortgageChartsManager {
       const active = idx === this.activeIndex;
       tab.classList.toggle('active', active);
       tab.setAttribute('aria-selected', String(active));
+      tab.tabIndex = active ? 0 : -1;
       if (active && this.tabsEl && this.tabsEl.scrollWidth > this.tabsEl.clientWidth) {
         const targetScroll = tab.offsetLeft - this.tabsEl.clientWidth / 2 + tab.offsetWidth / 2;
         this.tabsEl.scrollTo({ left: Math.max(0, targetScroll), behavior: 'smooth' });
@@ -784,11 +814,13 @@ export class MortgageChartsManager {
     // Scroll viewport smoothly if requested
     if (scrollViewport && this.viewport) {
       this.isProgrammaticScrolling = true;
+      clearTimeout(this.scrollDebounceTimer);
+      clearTimeout(this.programmaticScrollTimer);
       const targetLeft = this.activeIndex * this.viewport.clientWidth;
       this.viewport.scrollTo({ left: targetLeft, behavior: 'smooth' });
-      setTimeout(() => {
+      this.programmaticScrollTimer = setTimeout(() => {
         this.isProgrammaticScrolling = false;
-      }, 350);
+      }, 450);
     }
 
     // Redraw active slide for pixel perfection
@@ -930,12 +962,25 @@ export class MortgageChartsManager {
   // Event Binding
   // =========================================================================
   private bindEvents() {
-    // 1. Tab buttons
+    // 1. Tab buttons + WAI-ARIA tablist keyboard navigation
     this.tabs.forEach((tab) => {
       tab.addEventListener('click', () => {
         const idx = parseInt(tab.dataset.tab || '0', 10);
         this.setActiveIndex(idx, true);
       });
+    });
+
+    this.tabsEl?.addEventListener('keydown', (e) => {
+      let nextIdx: number | null = null;
+      if (e.key === 'ArrowRight') nextIdx = (this.activeIndex + 1) % this.slideCount;
+      else if (e.key === 'ArrowLeft') nextIdx = (this.activeIndex - 1 + this.slideCount) % this.slideCount;
+      else if (e.key === 'Home') nextIdx = 0;
+      else if (e.key === 'End') nextIdx = this.slideCount - 1;
+      if (nextIdx !== null) {
+        e.preventDefault();
+        this.setActiveIndex(nextIdx, true);
+        this.tabs[nextIdx]?.focus();
+      }
     });
 
     // 2. Pagination dots
@@ -972,7 +1017,18 @@ export class MortgageChartsManager {
           this.viewport.scrollTop = 0;
         }
         this.flushDirtySlides();
-        if (this.isProgrammaticScrolling) return;
+        if (this.isProgrammaticScrolling) {
+          clearTimeout(this.programmaticScrollTimer);
+          const targetLeft = this.activeIndex * this.viewport.clientWidth;
+          const settled = Math.abs(this.viewport.scrollLeft - targetLeft) < 2;
+          this.programmaticScrollTimer = setTimeout(
+            () => {
+              this.isProgrammaticScrolling = false;
+            },
+            settled ? 30 : 140
+          );
+          return;
+        }
         clearTimeout(this.scrollDebounceTimer);
         this.scrollDebounceTimer = setTimeout(() => {
           const width = this.viewport.clientWidth;
@@ -1092,11 +1148,14 @@ export class MortgageChartsManager {
 
     let baselineHtml = '';
     if (a.hasStrategy && a.baseline.rows.length > 0) {
-      const baseIdx = Math.min(
-        a.baseline.rows.length - 1,
-        Math.round((row.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
+      const baseIdx = Math.max(
+        0,
+        Math.min(
+          a.baseline.rows.length - 1,
+          Math.round((row.n / a.plan.periodsPerYear) * a.baseline.periodsPerYear) - 1
+        )
       );
-      if (baseIdx >= 0 && a.baseline.rows[baseIdx]) {
+      if (a.baseline.rows[baseIdx]) {
         const bRow = a.baseline.rows[baseIdx]!;
         const diff = bRow.balance - row.balance;
         baselineHtml = `
@@ -1174,12 +1233,14 @@ export class MortgageChartsManager {
     this.canvasBalance.addEventListener(
       'touchmove',
       (e) => {
+        clearTimeout(this.touchHideTimer);
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
     );
     this.canvasBalance.addEventListener('touchend', () => {
-      setTimeout(() => {
+      clearTimeout(this.touchHideTimer);
+      this.touchHideTimer = setTimeout(() => {
         if (this.hoverBalancePeriod !== null) {
           this.hoverBalancePeriod = null;
           this.hideTooltip();
@@ -1203,10 +1264,14 @@ export class MortgageChartsManager {
 
     return `
       <div class="tip-header">Lifetime Breakdown</div>
-      <div class="tip-row extra ${this.hoverLifetimeSegment === 'extra' ? 'highlight' : ''}">
+      ${
+        totalExtra > 0
+          ? `<div class="tip-row extra ${this.hoverLifetimeSegment === 'extra' ? 'highlight' : ''}">
         <span><i class="swatch extra"></i>Extra:</span>
         <strong>${formatMoney(totalExtra, c)} <span class="tip-pct">(${pct(totalExtra)})</span></strong>
-      </div>
+      </div>`
+          : ''
+      }
       <div class="tip-row principal ${this.hoverLifetimeSegment === 'principal' ? 'highlight' : ''}">
         <span><i class="swatch chart-principal"></i>${prinLabel}</span>
         <strong>${formatMoney(regularPrincipal, c)} <span class="tip-pct">(${pct(regularPrincipal)})</span></strong>
@@ -1306,12 +1371,14 @@ export class MortgageChartsManager {
     this.canvasLifetime.addEventListener(
       'touchmove',
       (e) => {
+        clearTimeout(this.touchHideTimer);
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
     );
     this.canvasLifetime.addEventListener('touchend', () => {
-      setTimeout(() => {
+      clearTimeout(this.touchHideTimer);
+      this.touchHideTimer = setTimeout(() => {
         if (this.hoverLifetimeSegment !== null) {
           this.hoverLifetimeSegment = null;
           this.hideTooltip();
@@ -1413,12 +1480,14 @@ export class MortgageChartsManager {
     this.canvasCashFlow.addEventListener(
       'touchmove',
       (e) => {
+        clearTimeout(this.touchHideTimer);
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
     );
     this.canvasCashFlow.addEventListener('touchend', () => {
-      setTimeout(() => {
+      clearTimeout(this.touchHideTimer);
+      this.touchHideTimer = setTimeout(() => {
         if (this.hoverCashFlowYearIdx !== null) {
           this.hoverCashFlowYearIdx = null;
           this.hideTooltip();

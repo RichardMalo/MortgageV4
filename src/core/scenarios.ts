@@ -505,14 +505,6 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
     const diff = cur.principal - cur.interest;
     if (diff >= 0) {
       crossYear = i + 1;
-      if (i === 0) {
-        crossYears = 0;
-      } else {
-        const prev = series[i - 1]!;
-        const prevDiff = prev.principal - prev.interest;
-        const t = prevDiff === diff ? 0 : -prevDiff / (diff - prevDiff);
-        crossYears = prev.x + t * (cur.x - prev.x);
-      }
       const startRowOfTipYear = i * perYear + 1;
       const tipRow =
         s.rows.find((r) => r.n >= startRowOfTipYear && r.principal + r.extra >= r.interest) ||
@@ -521,7 +513,15 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
       crossRowIndex = tipRow ? tipRow.n : Math.min(s.rows.length, (i + 1) * perYear);
       crossDate = tipRow
         ? tipRow.date
-        : paymentDate(parseDate(startDate), Math.max(1, Math.round(crossYears * 12)), 'monthly');
+        : paymentDate(parseDate(startDate), Math.max(1, Math.round((i + 0.5) * 12)), 'monthly');
+      if (i === 0) {
+        crossYears = crossRowIndex <= 1 ? 0 : (crossRowIndex - 1) / perYear;
+      } else {
+        const prev = series[i - 1]!;
+        const prevDiff = prev.principal - prev.interest;
+        const t = prevDiff === diff ? 0 : -prevDiff / (diff - prevDiff);
+        crossYears = prev.x + t * (cur.x - prev.x);
+      }
       break;
     }
   }
@@ -693,7 +693,7 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
         mainMetric: 'Principal > Interest',
         subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
         descText:
-          tippingYear === 1
+          tipMonth <= 1
             ? 'From Day 1, your payments build more equity than bank interest.'
             : 'Equity inflection point: payments build equity faster than bank interest.',
         badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',

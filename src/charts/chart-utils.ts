@@ -132,11 +132,12 @@ export const getNiceTicks = (maxValue: number, maxTicks = 5): number[] => {
   const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
   const normalized = roughStep / magnitude;
 
-  let step: number;
-  if (normalized < 1.5) step = 1 * magnitude;
-  else if (normalized < 3) step = 2 * magnitude;
-  else if (normalized < 7) step = 5 * magnitude;
-  else step = 10 * magnitude;
+  let rawStep: number;
+  if (normalized < 1.5) rawStep = 1 * magnitude;
+  else if (normalized < 3) rawStep = 2 * magnitude;
+  else if (normalized < 7) rawStep = 5 * magnitude;
+  else rawStep = 10 * magnitude;
+  const step = Math.max(1, Math.round(rawStep));
 
   const ticks: number[] = [];
   for (let val = 0; val <= maxValue + step * 0.05; val += step) {
@@ -247,13 +248,14 @@ export const drawYearAxis = (
   maxYears: number
 ) => {
   const getX = (t: number) => dims.padding.left + (t / maxYears) * dims.plotWidth;
-  const step = maxYears <= 10 ? 1 : maxYears <= 20 ? 2 : 5;
+  const step = maxYears < 2 ? 0.5 : maxYears <= 10 ? 1 : maxYears <= 20 ? 2 : 5;
   ctx.save();
   ctx.fillStyle = colors.mutedColor;
   ctx.font = font(11);
   ctx.textAlign = 'center';
   for (let t = 0; t <= maxYears + 1e-9; t += step) {
-    ctx.fillText(t === 0 ? 'Now' : `${t}y`, getX(t), dims.padding.top + dims.plotHeight + 20);
+    const label = t === 0 ? 'Now' : `${Number(t.toFixed(1))}y`;
+    ctx.fillText(label, getX(t), dims.padding.top + dims.plotHeight + 20);
   }
   ctx.restore();
 };
