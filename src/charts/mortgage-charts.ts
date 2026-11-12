@@ -84,12 +84,20 @@ export class MortgageChartsManager {
   // Floating Tooltip
   private tooltipEl: HTMLElement;
 
+  // Legend elements cached once
+  private baselineLegend: HTMLElement | null;
+  private keptLegend: HTMLElement | null;
+  private tippingLegend: HTMLElement | null;
+  private extraLegendItems: HTMLElement[];
+
   // State
   private activeIndex = 0;
   private isExpanded = false;
   private currentAnalysis: Analysis | null = null;
   private insightData: InsightData | null = null;
   private hasLoan = false;
+  private totalExtra = 0;
+  private lastViewportWidth = 0;
   private resizeObserver: ResizeObserver | null = null;
   private isProgrammaticScrolling = false;
   private programmaticScrollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -117,6 +125,15 @@ export class MortgageChartsManager {
 
     this.tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('.chart-tab-btn'));
     this.dots = Array.from(document.querySelectorAll<HTMLButtonElement>('.chart-dot'));
+
+    this.baselineLegend = document.getElementById('legend-baseline');
+    this.keptLegend = document.getElementById('legend-kept-baseline');
+    this.tippingLegend = document.getElementById('legend-tipping-baseline');
+    this.extraLegendItems = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '#chart-legend-cashflow [data-cat="extra"], #chart-legend-lifetime [data-cat="extra"]'
+      )
+    );
 
     // Create canvases inside containers
     this.canvasBalance = this.setupCanvas('chart-balance');
@@ -179,23 +196,19 @@ export class MortgageChartsManager {
     this.currentAnalysis = analysis;
     this.hasLoan = hasLoan;
     this.insightData = hasLoan ? computeInsights(analysis, entryStrategy) : null;
+    this.totalExtra = analysis.years.reduce((sum, y) => sum + y.extra, 0);
 
     // Toggle baseline legend visibility on the balance slide
-    const baselineLegend = document.getElementById('legend-baseline');
-    if (baselineLegend) {
-      baselineLegend.hidden = !analysis.hasStrategy;
+    if (this.baselineLegend) {
+      this.baselineLegend.hidden = !analysis.hasStrategy;
     }
-    const keptLegend = document.getElementById('legend-kept-baseline');
-    if (keptLegend) keptLegend.hidden = !analysis.hasStrategy;
-    const tippingLegend = document.getElementById('legend-tipping-baseline');
-    if (tippingLegend) tippingLegend.hidden = !analysis.hasStrategy;
+    if (this.keptLegend) this.keptLegend.hidden = !analysis.hasStrategy;
+    if (this.tippingLegend) this.tippingLegend.hidden = !analysis.hasStrategy;
 
-    const hasExtra = analysis.plan.rows.some((r) => r.extra > 0);
-    document
-      .querySelectorAll<HTMLElement>('#chart-legend-cashflow [data-cat="extra"], #chart-legend-lifetime [data-cat="extra"]')
-      .forEach((el) => {
-        el.hidden = !hasExtra;
-      });
+    const hasExtra = this.totalExtra > 0;
+    for (const el of this.extraLegendItems) {
+      el.hidden = !hasExtra;
+    }
     if (!hasExtra) {
       if (this.hoverCashFlowCategory === 'extra') this.hoverCashFlowCategory = null;
       if (this.hoverLifetimeSegment === 'extra') this.hoverLifetimeSegment = null;
@@ -559,7 +572,7 @@ export class MortgageChartsManager {
     const colors = getThemeColors();
 
     const totalInterest = Math.max(0, a.plan.totalInterest);
-    const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+    const totalExtra = this.totalExtra;
     const regularPrincipal = Math.max(0, a.loanAmount - totalExtra);
     const totalCost = regularPrincipal + totalExtra + totalInterest;
 
@@ -934,7 +947,7 @@ export class MortgageChartsManager {
     }
 
     if (slide.id === 'lifetime') {
-      const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+      const totalExtra = this.totalExtra;
       const segments: Array<'interest' | 'principal' | 'extra'> =
         totalExtra > 0 ? ['interest', 'principal', 'extra'] : ['interest', 'principal'];
       const curIdx = this.hoverLifetimeSegment ? segments.indexOf(this.hoverLifetimeSegment) : -1;
@@ -1118,17 +1131,36 @@ export class MortgageChartsManager {
     this.slides.forEach((s) => s.insight && this.bindInsightInteractivity(s));
 
     // 9. ResizeObserver
+    this.lastViewportWidth = this.viewport.clientWidth;
     this.resizeObserver = new ResizeObserver(() => {
-      this.drawAll();
-      const targetLeft = this.activeIndex * this.viewport.clientWidth;
-      this.viewport.scrollLeft = targetLeft;
+      const width = this.viewport.clientWidth;
+      if (width === this.lastViewportWidth) return;
+      this.lastViewportWidth = width;
+      const activeSlide = this.slides[this.activeIndex];
+      this.slides.forEach((s) => {
+        if (s === activeSlide) {
+          this.drawSlide(s);
+          this.dirtySlides.delete(s.id);
+        } else {
+          this.dirtySlides.add(s.id);
+        }
+      });
+      this.viewport.scrollLeft = this.activeIndex * width;
     });
     this.resizeObserver.observe(this.viewport);
 
     // System theme change listener
     window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener('change', () => {
       if (!document.documentElement.getAttribute('data-theme')) {
-        this.drawAll();
+        const activeSlide = this.slides[this.activeIndex];
+        this.slides.forEach((s) => {
+          if (s === activeSlide) {
+            this.drawSlide(s);
+            this.dirtySlides.delete(s.id);
+          } else {
+            this.dirtySlides.add(s.id);
+          }
+        });
       }
     });
 
@@ -1255,7 +1287,7 @@ export class MortgageChartsManager {
   // =========================================================================
   private buildLifetimeTooltipHtml(a: Analysis): string {
     const totalInterest = Math.max(0, a.plan.totalInterest);
-    const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+    const totalExtra = this.totalExtra;
     const regularPrincipal = Math.max(0, a.loanAmount - totalExtra);
     const totalCost = regularPrincipal + totalExtra + totalInterest;
     const c = a.inputs.country;
@@ -1298,7 +1330,7 @@ export class MortgageChartsManager {
       const dims = this.getDimensions(this.canvasLifetime, 240);
 
       const totalInterest = Math.max(0, a.plan.totalInterest);
-      const totalExtra = a.plan.rows.reduce((sum, r) => sum + (r.extra || 0), 0);
+      const totalExtra = this.totalExtra;
       const regularPrincipal = Math.max(0, a.loanAmount - totalExtra);
       const totalCost = regularPrincipal + totalExtra + totalInterest;
 

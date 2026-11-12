@@ -81,6 +81,48 @@ export const setPrintLightMode = (active: boolean) => {
   forcePrintLightMode = active;
 };
 
+const DARK_THEME_COLORS: ChartThemeColors = {
+  isDark: true,
+  textColor: '#f1f5f9',
+  mutedColor: '#94a3b8',
+  gridColor: 'rgba(255, 255, 255, 0.07)',
+  cardBg: '#11141c',
+  accentColor: '#60a5fa',
+  accentSoft: 'rgba(96, 165, 250, 0.2)',
+  extraColor: '#34d399',
+  extraHover: '#6ee7b7',
+  extraSoft: 'rgba(52, 211, 153, 0.22)',
+  principalColor: '#60a5fa',
+  principalHover: '#93c5fd',
+  interestColor: '#fb7185',
+  interestHover: '#fda4af',
+  interestSoft: 'rgba(251, 113, 133, 0.18)',
+  baselineColor: '#94a3b8',
+  warnSoft: 'rgba(251, 191, 36, 0.12)',
+  warnColor: '#fbbf24'
+};
+
+const LIGHT_THEME_COLORS: ChartThemeColors = {
+  isDark: false,
+  textColor: '#0f172a',
+  mutedColor: '#64748b',
+  gridColor: 'rgba(15, 23, 42, 0.06)',
+  cardBg: '#ffffff',
+  accentColor: '#2563eb',
+  accentSoft: 'rgba(37, 99, 235, 0.1)',
+  extraColor: '#059669',
+  extraHover: '#10b981',
+  extraSoft: 'rgba(5, 150, 105, 0.16)',
+  principalColor: '#2563eb',
+  principalHover: '#3b82f6',
+  interestColor: '#e11d48',
+  interestHover: '#be123c',
+  interestSoft: 'rgba(225, 29, 72, 0.12)',
+  baselineColor: '#64748b',
+  warnSoft: 'rgba(217, 119, 6, 0.09)',
+  warnColor: '#b45309'
+};
+
 export const getThemeColors = (): ChartThemeColors => {
   let isDark = false;
   if (typeof window !== 'undefined') {
@@ -101,26 +143,7 @@ export const getThemeColors = (): ChartThemeColors => {
     }
   }
 
-  return {
-    isDark,
-    textColor: isDark ? '#f1f5f9' : '#0f172a',
-    mutedColor: isDark ? '#94a3b8' : '#64748b',
-    gridColor: isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)',
-    cardBg: isDark ? '#11141c' : '#ffffff',
-    accentColor: isDark ? '#60a5fa' : '#2563eb',
-    accentSoft: isDark ? 'rgba(96, 165, 250, 0.2)' : 'rgba(37, 99, 235, 0.1)',
-    extraColor: isDark ? '#34d399' : '#059669',
-    extraHover: isDark ? '#6ee7b7' : '#10b981',
-    extraSoft: isDark ? 'rgba(52, 211, 153, 0.22)' : 'rgba(5, 150, 105, 0.16)',
-    principalColor: isDark ? '#60a5fa' : '#2563eb',
-    principalHover: isDark ? '#93c5fd' : '#3b82f6',
-    interestColor: isDark ? '#fb7185' : '#e11d48',
-    interestHover: isDark ? '#fda4af' : '#be123c',
-    interestSoft: isDark ? 'rgba(251, 113, 133, 0.18)' : 'rgba(225, 29, 72, 0.12)',
-    baselineColor: isDark ? '#94a3b8' : '#64748b',
-    warnSoft: isDark ? 'rgba(251, 191, 36, 0.12)' : 'rgba(217, 119, 6, 0.09)',
-    warnColor: isDark ? '#fbbf24' : '#b45309'
-  };
+  return isDark ? DARK_THEME_COLORS : LIGHT_THEME_COLORS;
 };
 
 /**

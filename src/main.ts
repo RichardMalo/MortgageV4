@@ -7,6 +7,7 @@ import {
   analyzeMortgage,
   canadianMinimumDown,
   clamp,
+  computeBasePayment,
   parseUrlInputs,
   round2,
   sanitizeInputs,
@@ -62,7 +63,7 @@ const loadState = (): MortgageInputs => {
 
 const computeRatioFromState = (s: MortgageInputs): number => {
   if (!s.paymentIncreaseEnabled || !s.customPayment) return 1;
-  const a = analyzeMortgage(s);
+  const a = computeBasePayment(s);
   return a.basePayment > 0 && s.customPayment >= a.basePayment
     ? clamp(s.customPayment / a.basePayment, 1, 2)
     : 1;
@@ -73,11 +74,43 @@ let paymentIncreaseRatio: number = computeRatioFromState(state);
 let entryStrategy: StrategyInputs = extractStrategyInputs(state);
 let entryPaymentIncreaseRatio: number = paymentIncreaseRatio;
 let scheduleView: 'yearly' | 'monthly' = 'yearly';
+let lastRenderedTheadView: 'yearly' | 'monthly' | null = null;
+let lastVisibilityKey = '';
 let lastAnalysis: Analysis | null = null;
 let lastMilestones: MilestoneData[] = [];
 let scheduleDirty = false;
 let chartsManager: MortgageChartsManager | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
+
+// Cached static DOM collections (populated on first query after DOMContentLoaded)
+let downPctPills: HTMLButtonElement[] | null = null;
+let amortPills: HTMLButtonElement[] | null = null;
+let formKeyControls: Array<HTMLInputElement | HTMLSelectElement> | null = null;
+let visibilityEls: HTMLElement[] | null = null;
+let segButtons: HTMLButtonElement[] | null = null;
+let currencyEls: HTMLElement[] | null = null;
+let taxLabelEls: HTMLElement[] | null = null;
+let feesLabelEls: HTMLElement[] | null = null;
+let scheduleSwitchBtns: HTMLButtonElement[] | null = null;
+
+const getDownPctPills = () =>
+  (downPctPills ??= Array.from(document.querySelectorAll<HTMLButtonElement>('[data-down-pct]')));
+const getAmortPills = () =>
+  (amortPills ??= Array.from(document.querySelectorAll<HTMLButtonElement>('[data-amort]')));
+const getFormKeyControls = () =>
+  (formKeyControls ??= Array.from(document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]')));
+const getVisibilityEls = () =>
+  (visibilityEls ??= Array.from(document.querySelectorAll<HTMLElement>('[data-show], [data-show-country]')));
+const getSegButtons = () =>
+  (segButtons ??= Array.from(document.querySelectorAll<HTMLButtonElement>('.seg-btn')));
+const getCurrencyEls = () =>
+  (currencyEls ??= Array.from(document.querySelectorAll<HTMLElement>('[data-currency]')));
+const getTaxLabelEls = () =>
+  (taxLabelEls ??= Array.from(document.querySelectorAll<HTMLElement>('[data-label="tax"]')));
+const getFeesLabelEls = () =>
+  (feesLabelEls ??= Array.from(document.querySelectorAll<HTMLElement>('[data-label="fees"]')));
+const getScheduleSwitchBtns = () =>
+  (scheduleSwitchBtns ??= Array.from(document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn')));
 
 const save = () => {
   clearTimeout(saveTimer);
@@ -95,14 +128,14 @@ const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, e
   if (explicitRatio !== undefined) {
     paymentIncreaseRatio = clamp(explicitRatio, 1, 2);
   } else if ('customPayment' in patch) {
-    const prelim = analyzeMortgage(state);
+    const prelim = computeBasePayment(state);
     if (state.paymentIncreaseEnabled && prelim.basePayment > 0 && state.customPayment) {
       paymentIncreaseRatio = clamp(state.customPayment / prelim.basePayment, 1, 2);
     } else if (!state.paymentIncreaseEnabled) {
       paymentIncreaseRatio = 1;
     }
   } else if (state.paymentIncreaseEnabled) {
-    const prelim = analyzeMortgage(state);
+    const prelim = computeBasePayment(state);
     if (prelim.basePayment > 0) {
       state.customPayment = round2(
         clamp(prelim.basePayment * paymentIncreaseRatio, prelim.basePayment, prelim.maxPayment)
@@ -111,7 +144,7 @@ const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, e
   }
   const hasStrategyKey = STRATEGY_KEYS.some((k) => k in patch);
   if (!hasStrategyKey && entryStrategy.paymentIncreaseEnabled) {
-    const entryPrelim = analyzeMortgage({ ...state, ...entryStrategy });
+    const entryPrelim = computeBasePayment({ ...state, ...entryStrategy });
     if (entryPrelim.basePayment > 0) {
       entryStrategy.customPayment = round2(
         clamp(entryPrelim.basePayment * entryPaymentIncreaseRatio, entryPrelim.basePayment, entryPrelim.maxPayment)
@@ -196,12 +229,18 @@ const showToast = (
 
 // ---------- form sync ----------
 
+const currencySymbolCache = new Map<Country, string>();
+
 const currencySymbol = (country: Country) => {
+  const cached = currencySymbolCache.get(country);
+  if (cached !== undefined) return cached;
   const r = REGIONS[country];
   const part = new Intl.NumberFormat(r.locale, { style: 'currency', currency: r.currency })
     .formatToParts(0)
     .find((p) => p.type === 'currency');
-  return part?.value.replace(/[A-Z]/g, '') || '$';
+  const sym = part?.value.replace(/[A-Z]/g, '') || '$';
+  currencySymbolCache.set(country, sym);
+  return sym;
 };
 
 const setField = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
@@ -216,27 +255,27 @@ const syncDownPct = () => {
   setField($<HTMLInputElement>('in-down-pct'), fmtNum(rounded));
 
   // Sync active state of down payment micro-pills
-  document.querySelectorAll<HTMLButtonElement>('[data-down-pct]').forEach((pill) => {
+  for (const pill of getDownPctPills()) {
     const pVal = parseFloat(pill.dataset.downPct || '0');
     pill.classList.toggle('active', Math.abs(rounded - pVal) < 0.2);
-  });
+  }
 };
 
 const syncAmortPills = () => {
-  document.querySelectorAll<HTMLButtonElement>('[data-amort]').forEach((pill) => {
+  for (const pill of getAmortPills()) {
     const yVal = parseInt(pill.dataset.amort || '0', 10);
     pill.classList.toggle('active', state.amortizationYears === yVal);
-  });
+  }
 };
 
 /** Writes state into every form control (skipping the one being typed in). */
 const syncForm = () => {
-  document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]').forEach((el) => {
+  for (const el of getFormKeyControls()) {
     const key = el.dataset.key as keyof MortgageInputs;
     const v = state[key];
     const isOptionalZero = typeof v === 'number' && v === 0 && el.getAttribute('placeholder') === '0';
     setField(el, isOptionalZero ? '' : typeof v === 'number' ? fmtNum(v) : String(v));
-  });
+  }
   syncDownPct();
   syncAmortPills();
 };
@@ -256,21 +295,25 @@ const syncCostsSectionOpen = () => {
 
 /** Shows/hides mode- and country-specific fields and localises labels. */
 const syncVisibility = () => {
+  const visKey = `${state.country}|${state.mode}|${state.frequency}`;
+  if (visKey === lastVisibilityKey) return;
+  lastVisibilityKey = visKey;
+
   const region = REGIONS[state.country];
-  document.querySelectorAll<HTMLElement>('[data-show], [data-show-country]').forEach((el) => {
+  for (const el of getVisibilityEls()) {
     const modeOk = !el.dataset.show || el.dataset.show === state.mode;
     const countryOk = !el.dataset.showCountry || el.dataset.showCountry === state.country;
     el.hidden = !(modeOk && countryOk);
-  });
-  document.querySelectorAll<HTMLButtonElement>('.seg-btn').forEach((b) => {
+  }
+  for (const b of getSegButtons()) {
     const active = b.dataset.mode === state.mode;
     b.classList.toggle('active', active);
     b.setAttribute('aria-checked', String(active));
-  });
+  }
   const symbol = currencySymbol(state.country);
-  document.querySelectorAll('[data-currency]').forEach((el) => (el.textContent = symbol));
-  document.querySelectorAll('[data-label="tax"]').forEach((el) => (el.textContent = region.propertyTaxLabel));
-  document.querySelectorAll('[data-label="fees"]').forEach((el) => (el.textContent = region.feesLabel));
+  for (const el of getCurrencyEls()) el.textContent = symbol;
+  for (const el of getTaxLabelEls()) el.textContent = region.propertyTaxLabel;
+  for (const el of getFeesLabelEls()) el.textContent = region.feesLabel;
 
   const hints: string[] = [];
   if (region.compounding === 'semi-annual') {
@@ -392,17 +435,29 @@ const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
   const isMonthly = scheduleView === 'monthly';
   const includeDay = plan.periodsPerYear > 12;
 
+  // Pre-index milestones in O(M) so row lookups are O(1) instead of O(N * M)
+  const milestoneMap = new Map<number, MilestoneData[]>();
+  for (const ms of milestones) {
+    const idx = isMonthly ? ms.monthIndex : ms.year;
+    let bucket = milestoneMap.get(idx);
+    if (!bucket) {
+      bucket = [];
+      milestoneMap.set(idx, bucket);
+    }
+    bucket.push(ms);
+  }
+
   $('schedule-body').innerHTML = isMonthly
     ? plan.rows
         .map((r) => {
           const m = formatShortDate(r.date, c, includeDay);
           const y = r.date.getFullYear();
           const y2 = String(y).slice(-2);
-          const matching = milestones.filter((ms) => ms.monthIndex === r.n);
-          const primaryMilestone = matching[0];
+          const matching = milestoneMap.get(r.n);
+          const primaryMilestone = matching?.[0];
           const rowClass = primaryMilestone ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
-          const badges = matching.map((ms) => ms.badgeDesktop).join('');
-          const pips = matching.map((ms) => ms.pipMobile).join('');
+          const badges = matching ? matching.map((ms) => ms.badgeDesktop).join('') : '';
+          const pips = matching ? matching.map((ms) => ms.pipMobile).join('') : '';
           return `<tr class="${rowClass}" id="schedule-row-month-${r.n}">
             <td class="col-num">${r.n}</td>
             <td class="col-date">${m} <span class="date-yr-full">${y}</span><span class="date-yr-short">'${y2}</span>${badges ? `<span class="milestone-badge-desktop">${badges}</span>` : ''}${pips ? `<span class="milestone-pip-mobile">${pips}</span>` : ''}</td>
@@ -416,11 +471,11 @@ const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
         .join('')
     : a.years
         .map((y) => {
-          const matching = milestones.filter((ms) => ms.year === y.year);
-          const badges = matching.map((ms) => ms.badgeDesktop).join('');
-          const pips = matching.map((ms) => ms.pipMobile).join('');
-          const primaryMilestone = matching[0];
-          const rowClass = matching.length > 0 ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
+          const matching = milestoneMap.get(y.year);
+          const badges = matching ? matching.map((ms) => ms.badgeDesktop).join('') : '';
+          const pips = matching ? matching.map((ms) => ms.pipMobile).join('') : '';
+          const primaryMilestone = matching?.[0];
+          const rowClass = primaryMilestone ? `milestone-row row-milestone-${primaryMilestone.key}` : '';
           const y2 = String(y.endDate.getFullYear()).slice(-2);
 
           return `<tr class="${rowClass}" id="schedule-row-year-${y.year}">
@@ -645,10 +700,6 @@ const render = () => {
 
   // Schedule table (Yearly vs Period/Monthly)
   const isMonthly = scheduleView === 'monthly';
-  const table = $('schedule-table');
-  if (table) {
-    table.setAttribute('data-view', scheduleView);
-  }
 
   // Update the period toggle label so it accurately reflects the selected payment frequency
   const periodBtn = $('schedule-btn-period');
@@ -664,21 +715,33 @@ const render = () => {
     periodBtn.textContent = periodLabel;
   }
 
-  const theadRow = $('schedule-thead-row');
-  if (theadRow) {
-    theadRow.innerHTML = isMonthly
-      ? `<th class="col-num">#</th>
-         <th class="col-date">Date</th>
-         <th class="col-payment"><span class="th-full">Payment</span><span class="th-short">Pmt</span></th>
-         <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
-         <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
-         <th class="col-extra">Extra</th>
-         <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`
-      : `<th class="col-year"><span class="th-full">Year</span><span class="th-short">Yr</span></th>
-         <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
-         <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
-         <th class="col-extra">Extra</th>
-         <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`;
+  if (lastRenderedTheadView !== scheduleView) {
+    lastRenderedTheadView = scheduleView;
+    const table = $('schedule-table');
+    if (table) {
+      table.setAttribute('data-view', scheduleView);
+    }
+    const theadRow = $('schedule-thead-row');
+    if (theadRow) {
+      theadRow.innerHTML = isMonthly
+        ? `<th class="col-num">#</th>
+           <th class="col-date">Date</th>
+           <th class="col-payment"><span class="th-full">Payment</span><span class="th-short">Pmt</span></th>
+           <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
+           <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
+           <th class="col-extra">Extra</th>
+           <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`
+        : `<th class="col-year"><span class="th-full">Year</span><span class="th-short">Yr</span></th>
+           <th class="col-interest"><span class="th-full">Interest</span><span class="th-short">Int</span></th>
+           <th class="col-principal"><span class="th-full">Principal</span><span class="th-short">Prin</span></th>
+           <th class="col-extra">Extra</th>
+           <th class="col-balance"><span class="th-full">Balance</span><span class="th-short">Bal</span></th>`;
+    }
+    for (const btn of getScheduleSwitchBtns()) {
+      const active = btn.dataset.scheduleView === scheduleView;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-checked', String(active));
+    }
   }
 
   const scheduleTitle = $('schedule-title');
@@ -689,12 +752,6 @@ const render = () => {
         : 'Payment schedule'
       : 'Yearly schedule';
   }
-
-  document.querySelectorAll<HTMLButtonElement>('.schedule-switch-btn').forEach((btn) => {
-    const active = btn.dataset.scheduleView === scheduleView;
-    btn.classList.toggle('active', active);
-    btn.setAttribute('aria-checked', String(active));
-  });
 
   // Calculate & render the Prada Milestone Horizons Showcase
   const milestones = buildMilestones(a);
@@ -770,9 +827,23 @@ const resetMobileViewportOffset = () => {
   setTimeout(recenter, 120);
 };
 
+const applySanitizedOnBlur = () => {
+  const sanitized = sanitizeInputs(state);
+  const changed = (Object.keys(sanitized) as Array<keyof MortgageInputs>).some(
+    (k) => sanitized[k] !== state[k]
+  );
+  state = sanitized;
+  syncForm();
+  if (changed) {
+    save();
+    render();
+  }
+  resetMobileViewportOffset();
+};
+
 const bind = () => {
   // Input fields
-  document.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-key]').forEach((el) => {
+  for (const el of getFormKeyControls()) {
     const key = el.dataset.key as keyof MortgageInputs;
     const handler = () => {
       if (TEXT_KEYS.has(key)) {
@@ -792,14 +863,8 @@ const bind = () => {
         el.blur();
       }
     });
-    el.addEventListener('blur', () => {
-      state = sanitizeInputs(state);
-      save();
-      syncForm();
-      render();
-      resetMobileViewportOffset();
-    });
-  });
+    el.addEventListener('blur', applySanitizedOnBlur);
+  }
 
   // Down payment percentage input
   const downPctInput = $<HTMLInputElement>('in-down-pct');
@@ -817,13 +882,7 @@ const bind = () => {
       downPctInput.blur();
     }
   });
-  downPctInput.addEventListener('blur', () => {
-    state = sanitizeInputs(state);
-    save();
-    syncForm();
-    render();
-    resetMobileViewportOffset();
-  });
+  downPctInput.addEventListener('blur', applySanitizedOnBlur);
 
   // Down payment preset micro-pills
   document.querySelectorAll<HTMLButtonElement>('[data-down-pct]').forEach((pill) => {
@@ -971,13 +1030,17 @@ const bind = () => {
     customInput.addEventListener('blur', () => {
       if (lastAnalysis) {
         const val = parseFloat(customInput.value);
-        const clamped = clamp(
-          Number.isFinite(val) ? val : lastAnalysis.basePayment,
-          lastAnalysis.basePayment,
-          lastAnalysis.maxPayment
+        const clamped = round2(
+          clamp(
+            Number.isFinite(val) ? val : lastAnalysis.basePayment,
+            lastAnalysis.basePayment,
+            lastAnalysis.maxPayment
+          )
         );
         customInput.value = fmtNum(clamped);
-        update({ customPayment: clamped });
+        if (clamped !== state.customPayment) {
+          update({ customPayment: clamped });
+        }
       }
       resetMobileViewportOffset();
     });

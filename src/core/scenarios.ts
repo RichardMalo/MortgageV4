@@ -9,19 +9,21 @@
 
 import { Analysis, MortgageInputs, ScheduleResult } from './types.js';
 import {
-  buildSchedule,
   cappedPrepaymentPerYear,
   clamp,
   parseDate,
   paymentDate,
   regularPayment,
   round2,
-  ScheduleParams
+  ScheduleParams,
+  ScheduleSummary,
+  simulateScheduleSummary
 } from './mortgage.js';
 import { FREQUENCIES, REGIONS } from './regions.js';
 import { formatDuration, formatMoney, formatMonthYear, isoDate } from './format.js';
 
 type BaseParams = Omit<ScheduleParams, 'frequency'>;
+type AnySchedule = ScheduleResult | ScheduleSummary;
 
 const baseParams = (a: Analysis): BaseParams => ({
   principal: a.loanAmount,
@@ -32,10 +34,11 @@ const baseParams = (a: Analysis): BaseParams => ({
 });
 
 /** Length of a schedule, in months. */
-export const scheduleMonths = (s: ScheduleResult): number => (s.numPayments * 12) / s.periodsPerYear;
+export const scheduleMonths = (s: AnySchedule): number => (s.numPayments * 12) / s.periodsPerYear;
 
 /** Sum of all prepayments (extra + lump sums + payment increases) in a schedule. */
-export const totalPrepaid = (s: ScheduleResult): number => round2(s.rows.reduce((t, r) => t + r.extra, 0));
+export const totalPrepaid = (s: AnySchedule): number =>
+  'totalExtra' in s ? s.totalExtra : round2(s.rows.reduce((t, r) => t + r.extra, 0));
 
 const hasLoan = (a: Analysis) => a.loanAmount > 0 && a.plan.numPayments > 0;
 
@@ -76,7 +79,7 @@ export interface ExtraSweep {
   perDollar: number | null;
 }
 
-const toPoint = (a: Analysis, extraMonthly: number, s: ScheduleResult): SweepPoint => ({
+const toPoint = (a: Analysis, extraMonthly: number, s: AnySchedule): SweepPoint => ({
   extraMonthly,
   interestSaved: round2(Math.max(0, a.baseline.totalInterest - s.totalInterest)),
   monthsSaved: Math.max(0, Math.round(a.baseline.numPayments - scheduleMonths(s))),
@@ -94,24 +97,27 @@ export const extraPaymentSweep = (a: Analysis, steps = 20, nudge = 100): ExtraSw
   const cur = Math.max(0, a.inputs.extraMonthly);
   const step = niceStep(Math.max(500, cur * 2, a.monthlyEquivalent * 0.5) / steps);
   const maxExtra = step * steps;
+  const base = baseParams(a);
+  const current = toPoint(a, cur, a.plan);
 
   const run = (extra: number) =>
-    toPoint(
-      a,
-      extra,
-      buildSchedule({
-        ...baseParams(a),
-        frequency: a.inputs.frequency,
-        extraMonthly: extra,
-        annualLumpSum: a.inputs.annualLumpSum,
-        paymentIncrease: a.paymentIncrease
-      })
-    );
+    Math.abs(extra - cur) < 1e-9
+      ? current
+      : toPoint(
+          a,
+          extra,
+          simulateScheduleSummary({
+            ...base,
+            frequency: a.inputs.frequency,
+            extraMonthly: extra,
+            annualLumpSum: a.inputs.annualLumpSum,
+            paymentIncrease: a.paymentIncrease
+          })
+        );
 
   const points: SweepPoint[] = [];
   for (let i = 0; i <= steps; i++) points.push(run(i * step));
 
-  const current = toPoint(a, cur, a.plan);
   const next = run(cur + nudge);
 
   const region = REGIONS[a.inputs.country];
@@ -180,7 +186,7 @@ const RESET_STRATEGY: Partial<MortgageInputs> = {
 const describeStrategy = (
   a: Analysis,
   entry: StrategyInputs,
-  schedule: ScheduleResult,
+  schedule: AnySchedule,
   basePayment: number,
   paymentIncrease: number
 ): { badge: string; detail: string } => {
@@ -294,7 +300,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
     id: string,
     label: string,
     detail: string,
-    s: ScheduleResult,
+    s: AnySchedule,
     extraPerYear: number,
     cappedYearly: number,
     patch: Partial<MortgageInputs> | null,
@@ -325,7 +331,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
   const list: Strategy[] = [];
 
   // Accelerated bi-weekly: half the monthly payment every 2 weeks (≈ 13 monthly payments/yr).
-  const accel = buildSchedule({ ...base, frequency: 'accelerated-bi-weekly' });
+  const accel = simulateScheduleSummary({ ...base, frequency: 'accelerated-bi-weekly' });
   list.push(
     build(
       'accel-biweekly',
@@ -346,7 +352,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
   ];
   for (const [id, label, pct] of increases) {
     const inc = round2(monthlyBase * pct);
-    const s = buildSchedule({ ...base, frequency: 'monthly', paymentIncrease: inc });
+    const s = simulateScheduleSummary({ ...base, frequency: 'monthly', paymentIncrease: inc });
     const capped = cappedPrepaymentPerYear(a.inputs.country, 0, 0, inc, 12);
     list.push(
       build(id, label, `${money(monthlyBase + inc)}/mo (+${money(inc)})`, s, inc * 12, capped, {
@@ -359,7 +365,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
 
   // Flat extra per month.
   for (const extra of [100, 250]) {
-    const s = buildSchedule({ ...base, frequency: 'monthly', extraMonthly: extra });
+    const s = simulateScheduleSummary({ ...base, frequency: 'monthly', extraMonthly: extra });
     const capped = cappedPrepaymentPerYear(a.inputs.country, extra, 0, 0, 12);
     list.push(
       build(`extra-${extra}`, `+${money(extra)}/mo extra`, `${money(extra)} extra each month`, s, extra * 12, capped, {
@@ -371,7 +377,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
 
   // Yearly lump sum (~2% of the loan, rounded to 500).
   const lump = Math.max(1000, Math.round((a.loanAmount * 0.02) / 500) * 500);
-  const lumpSched = buildSchedule({ ...base, frequency: 'monthly', annualLumpSum: lump });
+  const lumpSched = simulateScheduleSummary({ ...base, frequency: 'monthly', annualLumpSum: lump });
   const lumpCapped = cappedPrepaymentPerYear(a.inputs.country, 0, lump, 0, 12);
   list.push(
     build('lump', `${money(lump)} yearly lump sum`, `${money(lump)} once a year`, lumpSched, lump, lumpCapped, {
@@ -383,7 +389,7 @@ export const strategyLeaderboard = (a: Analysis, entryInputs?: StrategyInputs): 
   // Always include the user's current strategy (what they went in with before playing around with Strategy Comparison).
   const entrySchedule = isEntrySameAsActive
     ? a.plan
-    : buildSchedule({
+    : simulateScheduleSummary({
         ...base,
         frequency: entry.frequency,
         extraMonthly: entry.extraMonthly,
@@ -429,7 +435,11 @@ export interface CumulativeSeries {
   interest: number[];
 }
 
+const cumulativeInterestCache = new WeakMap<ScheduleResult, CumulativeSeries>();
+
 export const cumulativeInterest = (s: ScheduleResult): CumulativeSeries => {
+  const cached = cumulativeInterestCache.get(s);
+  if (cached) return cached;
   const years = [0];
   const interest = [0];
   let sum = 0;
@@ -438,7 +448,9 @@ export const cumulativeInterest = (s: ScheduleResult): CumulativeSeries => {
     years.push(r.n / s.periodsPerYear);
     interest.push(round2(sum));
   }
-  return { years, interest };
+  const res = { years, interest };
+  cumulativeInterestCache.set(s, res);
+  return res;
 };
 
 /** Cumulative interest at a given elapsed time (step-wise; flat after payoff). */
@@ -478,7 +490,18 @@ export interface TippingPoint {
   crossRowIndex: number | null;
 }
 
+const tippingPointCache = new WeakMap<ScheduleResult, Map<string, TippingPoint>>();
+
 export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint => {
+  let byDate = tippingPointCache.get(s);
+  if (byDate) {
+    const cached = byDate.get(startDate);
+    if (cached) return cached;
+  } else {
+    byDate = new Map<string, TippingPoint>();
+    tippingPointCache.set(s, byDate);
+  }
+
   const series: YearSplit[] = [];
   const perYear = s.periodsPerYear;
   let bucket = { interest: 0, principal: 0, count: 0 };
@@ -526,7 +549,9 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
     }
   }
 
-  return { series, crossYears, crossDate, crossYear, crossRowIndex };
+  const res = { series, crossYears, crossDate, crossYear, crossRowIndex };
+  byDate.set(startDate, res);
+  return res;
 };
 
 // ---------------------------------------------------------------------------
@@ -570,22 +595,22 @@ export const costOfWaiting = (
   const strat = strategy ?? currentStrategy(a);
   const base = baseParams(a);
   const start = parseDate(a.inputs.startDate);
+  const baseCumInterest = cumulativeInterest(a.baseline).interest;
   const out: DelayPoint[] = [];
 
   for (const d of delays) {
     let totalInterest: number;
     let months: number;
     if (d <= 0) {
-      const s = useCurrent ? a.plan : buildSchedule({ ...base, ...strat });
+      const s = useCurrent ? a.plan : simulateScheduleSummary({ ...base, ...strat });
       totalInterest = s.totalInterest;
       months = scheduleMonths(s);
     } else {
       const periods = Math.round(d * 12);
       if (periods >= a.baseline.numPayments || d >= a.inputs.amortizationYears) break;
-      const phase1 = a.baseline.rows.slice(0, periods);
-      const balance = phase1[phase1.length - 1]!.balance;
-      const interest1 = phase1.reduce((t, r) => t + r.interest, 0);
-      const phase2 = buildSchedule({
+      const balance = a.baseline.rows[periods - 1]!.balance;
+      const interest1 = baseCumInterest[periods]!;
+      const phase2 = simulateScheduleSummary({
         ...base,
         ...strat,
         principal: balance,

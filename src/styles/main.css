@@ -2128,6 +2128,11 @@ table[data-view="monthly"] .col-balance {
   width: 17%;
 }
 
+#schedule-body tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 27px;
+}
+
 tbody tr:nth-child(even) {
   background: var(--input);
 }

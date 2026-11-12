@@ -108,8 +108,7 @@ export const parseUrlInputs = (search: string): Partial<MortgageInputs> | null =
 
 /** Serializes sanitized mortgage inputs into URLSearchParams for link sharing. */
 export const serializeUrlInputs = (raw: Partial<MortgageInputs>): URLSearchParams => {
-  const a = analyzeMortgage(raw);
-  const inp = a.inputs;
+  const { inputs: inp, basePayment, maxPayment } = computeBasePayment(raw);
   const params = new URLSearchParams();
   params.set('country', inp.country);
   params.set('mode', inp.mode);
@@ -126,7 +125,7 @@ export const serializeUrlInputs = (raw: Partial<MortgageInputs>): URLSearchParam
   if (inp.extraMonthly > 0) params.set('extra', String(inp.extraMonthly));
   if (inp.annualLumpSum > 0) params.set('lump', String(inp.annualLumpSum));
   if (inp.paymentIncreaseEnabled && inp.customPayment) {
-    const clampedCustom = round2(clamp(inp.customPayment, a.basePayment, a.maxPayment));
+    const clampedCustom = round2(clamp(inp.customPayment, basePayment, maxPayment));
     if (clampedCustom > 0) {
       params.set('custom', String(clampedCustom));
     }
@@ -160,10 +159,14 @@ export const parseDate = (s: string): Date => {
   return new Date(y!, (m || 1) - 1, d || 1);
 };
 
-const addMonthsClamped = (start: Date, months: number): Date => {
+export const addMonthsClamped = (start: Date, months: number): Date => {
+  const day = start.getDate();
+  if (day <= 28) {
+    return new Date(start.getFullYear(), start.getMonth() + months, day);
+  }
   const target = new Date(start.getFullYear(), start.getMonth() + months, 1);
   const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(start.getDate(), lastDay));
+  target.setDate(Math.min(day, lastDay));
   return target;
 };
 
@@ -289,6 +292,127 @@ export const buildSchedule = (p: ScheduleParams): ScheduleResult => {
     totalPaid: round2(totalPaid),
     numPayments: rows.length,
     payoffDate: rows.length ? rows[rows.length - 1]!.date : null
+  };
+};
+
+export interface ScheduleSummary {
+  regularPayment: number;
+  basePayment: number;
+  periodsPerYear: number;
+  totalInterest: number;
+  totalPaid: number;
+  totalExtra: number;
+  numPayments: number;
+  payoffDate: Date | null;
+}
+
+/**
+ * Fast summary-only schedule simulation for "what-if" sweeps and comparisons.
+ * Identical math to `buildSchedule`, but avoids allocating intermediate `PaymentRow` and `Date` objects per period.
+ */
+export const simulateScheduleSummary = (p: ScheduleParams): ScheduleSummary => {
+  const perYear = FREQUENCIES[p.frequency].perYear;
+  const basePayment = regularPayment(p);
+  const paymentIncrease = Math.max(0, p.paymentIncrease || 0);
+  const effectivePayment = round2(basePayment + paymentIncrease);
+
+  if (p.principal <= 0.005) {
+    return {
+      regularPayment: 0,
+      basePayment: 0,
+      periodsPerYear: perYear,
+      totalInterest: 0,
+      totalPaid: 0,
+      totalExtra: 0,
+      numPayments: 0,
+      payoffDate: null
+    };
+  }
+
+  const r = periodicRate(p.annualRate, p.compounding, perYear);
+  const lastScheduled = Math.max(1, Math.round(p.years * perYear));
+  const extraPerPeriod = (Math.max(0, p.extraMonthly || 0) * 12) / perYear;
+  const lump = Math.max(0, p.annualLumpSum || 0);
+
+  let balance = round2(p.principal);
+  let totalInterest = 0;
+  let totalPaid = 0;
+  let totalExtra = 0;
+  let numPayments = 0;
+
+  for (let n = 1; n <= lastScheduled && balance > 0; n++) {
+    const interest = round2(balance * r);
+    const owing = round2(balance + interest);
+    let scheduled = basePayment;
+    let extra = round2(extraPerPeriod + paymentIncrease + (n % perYear === 0 ? lump : 0));
+
+    if (scheduled >= owing) {
+      scheduled = owing;
+      extra = 0;
+    } else if (scheduled + extra >= owing) {
+      extra = round2(owing - scheduled);
+    } else if (n === lastScheduled) {
+      scheduled = round2(owing - extra);
+    }
+
+    const principal = round2(scheduled - interest);
+    balance = round2(balance - principal - extra);
+    if (balance < 0.005) balance = 0;
+
+    totalInterest += interest;
+    totalPaid += scheduled + extra;
+    totalExtra += extra;
+    numPayments = n;
+  }
+
+  return {
+    regularPayment: effectivePayment,
+    basePayment,
+    periodsPerYear: perYear,
+    totalInterest: round2(totalInterest),
+    totalPaid: round2(totalPaid),
+    totalExtra: round2(totalExtra),
+    numPayments,
+    payoffDate: numPayments > 0 ? paymentDate(parseDate(p.startDate), numPayments, p.frequency) : null
+  };
+};
+
+/**
+ * Fast O(1) calculation of sanitized inputs, loanAmount, basePayment, and maxPayment
+ * without generating full amortization schedules.
+ */
+export const computeBasePayment = (
+  raw: Partial<MortgageInputs>
+): { inputs: MortgageInputs; loanAmount: number; basePayment: number; maxPayment: number } => {
+  const inputs = sanitizeInputs(raw);
+  const region = REGIONS[inputs.country];
+  let loanAmount: number;
+  if (inputs.mode === 'purchase') {
+    const { homePrice, downPayment } = inputs;
+    const base = homePrice - downPayment;
+    const ltv = homePrice > 0 ? base / homePrice : 0;
+    loanAmount = base;
+    if (region.insurance === 'cmhc' && homePrice > 0 && base > 0) {
+      const rate = homePrice < CMHC_MAX_PRICE ? cmhcPremiumRate(ltv, inputs.amortizationYears) : null;
+      if (rate !== null) {
+        loanAmount = round2(base + round2(base * rate));
+      }
+    }
+  } else {
+    loanAmount = round2(inputs.currentBalance);
+  }
+  const basePayment = regularPayment({
+    principal: loanAmount,
+    annualRate: inputs.annualRate,
+    compounding: region.compounding,
+    years: inputs.amortizationYears,
+    frequency: inputs.frequency
+  });
+  return {
+    inputs,
+    loanAmount,
+    basePayment,
+    maxPayment: round2(basePayment * 2)
   };
 };
 

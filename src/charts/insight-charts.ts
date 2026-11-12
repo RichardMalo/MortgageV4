@@ -13,7 +13,7 @@
 
 import { Analysis, MortgageInputs } from '../core/types.js';
 import { formatDuration, formatMoney, formatMonthYear } from '../core/format.js';
-import { parseDate } from '../core/mortgage.js';
+import { addMonthsClamped, parseDate } from '../core/mortgage.js';
 import {
   CumulativeSeries,
   DelayPoint,
@@ -61,7 +61,7 @@ export interface InsightData {
   baseTip: TippingPoint;
 }
 
-/** Runs every scenario once per render (~40 schedules; a few milliseconds). */
+/** Lazily computes scenario series on first access and caches per render. */
 export const computeInsights = (a: Analysis, entryStrategy?: StrategyInputs): InsightData => {
   const hasActivePrepay =
     a.inputs.frequency.startsWith('accelerated') ||
@@ -69,23 +69,54 @@ export const computeInsights = (a: Analysis, entryStrategy?: StrategyInputs): In
     a.inputs.annualLumpSum > 0 ||
     a.paymentIncrease > 0;
   const waitingIsExample = !hasActivePrepay || a.interestSaved < 1;
-  const waiting = waitingIsExample
-    ? costOfWaiting(a, undefined, {
-        frequency: 'monthly',
-        extraMonthly: EXAMPLE_EXTRA,
-        annualLumpSum: 0,
-        paymentIncrease: 0
-      })
-    : costOfWaiting(a);
+
+  let sweepVal: ExtraSweep | null | undefined;
+  let strategiesVal: Strategy[] | undefined;
+  let waitingVal: DelayPoint[] | undefined;
+  let planCumVal: CumulativeSeries | undefined;
+  let baseCumVal: CumulativeSeries | undefined;
+  let planTipVal: TippingPoint | undefined;
+  let baseTipVal: TippingPoint | undefined;
+
   return {
-    sweep: extraPaymentSweep(a),
-    strategies: strategyLeaderboard(a, entryStrategy),
-    waiting,
+    get sweep() {
+      if (sweepVal === undefined) sweepVal = extraPaymentSweep(a);
+      return sweepVal;
+    },
+    get strategies() {
+      if (strategiesVal === undefined) strategiesVal = strategyLeaderboard(a, entryStrategy);
+      return strategiesVal;
+    },
+    get waiting() {
+      if (waitingVal === undefined) {
+        waitingVal = waitingIsExample
+          ? costOfWaiting(a, undefined, {
+              frequency: 'monthly',
+              extraMonthly: EXAMPLE_EXTRA,
+              annualLumpSum: 0,
+              paymentIncrease: 0
+            })
+          : costOfWaiting(a);
+      }
+      return waitingVal;
+    },
     waitingIsExample,
-    planCum: cumulativeInterest(a.plan),
-    baseCum: cumulativeInterest(a.baseline),
-    planTip: tippingPoint(a.plan, a.inputs.startDate),
-    baseTip: tippingPoint(a.baseline, a.inputs.startDate)
+    get planCum() {
+      if (planCumVal === undefined) planCumVal = cumulativeInterest(a.plan);
+      return planCumVal;
+    },
+    get baseCum() {
+      if (baseCumVal === undefined) baseCumVal = cumulativeInterest(a.baseline);
+      return baseCumVal;
+    },
+    get planTip() {
+      if (planTipVal === undefined) planTipVal = tippingPoint(a.plan, a.inputs.startDate);
+      return planTipVal;
+    },
+    get baseTip() {
+      if (baseTipVal === undefined) baseTipVal = tippingPoint(a.baseline, a.inputs.startDate);
+      return baseTipVal;
+    }
   };
 };
 
@@ -128,10 +159,8 @@ const compact = (a: Analysis, x: number) => formatCompactMoney(x, a.inputs.count
 const b = (s: string) => `<strong>${s}</strong>`;
 
 /** Calendar date `years` after the first payment. */
-const dateAfter = (a: Analysis, years: number): Date => {
-  const s = parseDate(a.inputs.startDate);
-  return new Date(s.getFullYear(), s.getMonth() + Math.round(years * 12), s.getDate());
-};
+const dateAfter = (a: Analysis, years: number): Date =>
+  addMonthsClamped(parseDate(a.inputs.startDate), Math.round(years * 12));
 const monthYear = (a: Analysis, dt: Date | null) => formatMonthYear(dt, a.inputs.country);
 
 const lastOf = <T>(arr: T[]): T => arr[arr.length - 1]!;
