@@ -415,7 +415,9 @@ export const tippingChart: InsightChart = {
     // Plan tipping point
     if (px !== null) {
       const x = g.getX(px);
-      const y = g.getY(valueAt(d.planTip.series, px, 'interest'));
+      const yVal =
+        (valueAt(d.planTip.series, px, 'interest') + valueAt(d.planTip.series, px, 'principal')) / 2;
+      const y = g.getY(yVal);
       guideLine(ctx, x, dims, colors);
       dot(ctx, x, y, colors.extraColor, colors.cardBg, 6);
       drawPill(

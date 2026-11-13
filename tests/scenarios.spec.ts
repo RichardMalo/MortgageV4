@@ -168,6 +168,10 @@ describe('Scenario & Decision Math Engine', () => {
       // Meanwhile, the preset bar they clicked is marked as isApplied
       const accelPreset = list.find((s) => s.id === 'accel-biweekly');
       expect(accelPreset?.isApplied).toBe(true);
+
+      // Non-increase strategy presets explicitly reset customPayment to 0
+      const extraPreset = list.find((s) => s.id === 'extra-100');
+      expect(extraPreset?.patch?.customPayment).toBe(0);
     });
 
     it('flags strategies that exceed regional penalty-free prepayment caps (e.g., UK 10% cap)', () => {
@@ -258,6 +262,33 @@ describe('Scenario & Decision Math Engine', () => {
       const row = defaultAnalysis.plan.rows[tip.crossRowIndex! - 1];
       expect(row).toBeDefined();
       expect(tip.crossDate?.getTime()).toBe(row?.date.getTime());
+
+      // crossRowIndex should be the exact first sustained crossover payment
+      const firstSustainedRow = defaultAnalysis.plan.rows.find((r) => r.principal + r.extra >= r.interest);
+      expect(tip.crossRowIndex).toBe(firstSustainedRow?.n);
+
+      // Even when the crossover occurs in the second half of a year (so that year's full-year average still has principal < interest),
+      // tippingPoint should identify the exact payment row and year rather than skipping to the next year
+      const lateInYear = analyzeMortgage({
+        country: 'CA',
+        homePrice: 770_000,
+        downPayment: 154_000,
+        annualRate: 4.8,
+        amortizationYears: 25,
+        frequency: 'monthly'
+      });
+      const lateFirstRow = lateInYear.plan.rows.find((r) => r.principal + r.extra >= r.interest)!;
+      const lateTip = tippingPoint(lateInYear.plan, lateInYear.inputs.startDate);
+      expect(lateTip.crossRowIndex).toBe(lateFirstRow.n);
+      expect(lateTip.crossYear).toBe(Math.ceil(lateFirstRow.n / lateInYear.plan.periodsPerYear));
+
+      const lateMilestones = buildMilestones(lateInYear);
+      const lateTipMilestone = lateMilestones.find((m) => m.key === 'tipping');
+      const lateNums = (lateTipMilestone?.subMetric.match(/[\d,]+(\.\d+)?/g) ?? []).map((s) =>
+        Number(s.replace(/,/g, ''))
+      );
+      expect(lateNums.length).toBe(2);
+      expect(lateNums[0]!).toBeGreaterThanOrEqual(lateNums[1]!);
     });
 
     it('pulls tipping point earlier with aggressive prepayment', () => {
@@ -360,6 +391,13 @@ describe('Scenario & Decision Math Engine', () => {
         expect(m.badgeDesktop.length).toBeGreaterThan(0);
         expect(m.pipMobile.length).toBeGreaterThan(0);
       }
+      const tipMilestone = milestones.find((m) => m.key === 'tipping');
+      expect(tipMilestone).toBeDefined();
+      const nums = (tipMilestone?.subMetric.match(/[\d,]+(\.\d+)?/g) ?? []).map((s) =>
+        Number(s.replace(/,/g, ''))
+      );
+      expect(nums.length).toBe(2);
+      expect(nums[0]!).toBeGreaterThanOrEqual(nums[1]!);
     });
 
     it('omits the 5-Yr Term Renewal milestone when amortization is 5 years or less, and supports 1-year payoff', () => {

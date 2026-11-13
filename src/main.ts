@@ -131,7 +131,7 @@ const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, e
     const prelim = computeBasePayment(state);
     if (state.paymentIncreaseEnabled && prelim.basePayment > 0 && state.customPayment) {
       paymentIncreaseRatio = clamp(state.customPayment / prelim.basePayment, 1, 2);
-    } else if (!state.paymentIncreaseEnabled) {
+    } else {
       paymentIncreaseRatio = 1;
     }
   } else if (state.paymentIncreaseEnabled) {
@@ -829,6 +829,22 @@ const resetMobileViewportOffset = () => {
 
 const applySanitizedOnBlur = () => {
   const sanitized = sanitizeInputs(state);
+  if (sanitized.paymentIncreaseEnabled) {
+    const prelim = computeBasePayment(sanitized);
+    if (prelim.basePayment > 0) {
+      sanitized.customPayment = round2(
+        clamp(prelim.basePayment * paymentIncreaseRatio, prelim.basePayment, prelim.maxPayment)
+      );
+    }
+  }
+  if (entryStrategy.paymentIncreaseEnabled) {
+    const entryPrelim = computeBasePayment({ ...sanitized, ...entryStrategy });
+    if (entryPrelim.basePayment > 0) {
+      entryStrategy.customPayment = round2(
+        clamp(entryPrelim.basePayment * entryPaymentIncreaseRatio, entryPrelim.basePayment, entryPrelim.maxPayment)
+      );
+    }
+  }
   const changed = (Object.keys(sanitized) as Array<keyof MortgageInputs>).some(
     (k) => sanitized[k] !== state[k]
   );
@@ -1009,6 +1025,12 @@ const bind = () => {
   const customInput = $<HTMLInputElement>('in-payment-increase');
   if (customInput) {
     customInput.addEventListener('input', () => {
+      if (customInput.value.trim() === '') {
+        if (lastAnalysis) {
+          update({ customPayment: lastAnalysis.basePayment }, false, 1);
+        }
+        return;
+      }
       const val = parseFloat(customInput.value);
       if (Number.isFinite(val)) {
         if (lastAnalysis && val > lastAnalysis.maxPayment) {
@@ -1147,11 +1169,9 @@ const prepareForPrint = () => {
     renderScheduleRows(lastAnalysis, lastMilestones);
     scheduleDirty = false;
   }
-  if (!printPrepared) {
-    printPrepared = true;
-    setPrintLightMode(true);
-    chartsManager?.drawAll();
-  }
+  printPrepared = true;
+  setPrintLightMode(true);
+  chartsManager?.drawAll();
 };
 
 const restoreAfterPrint = () => {

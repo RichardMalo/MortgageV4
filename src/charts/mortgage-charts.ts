@@ -103,6 +103,7 @@ export class MortgageChartsManager {
   private programmaticScrollTimer: ReturnType<typeof setTimeout> | undefined;
   private scrollDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   private touchHideTimer: ReturnType<typeof setTimeout> | undefined;
+  private isTouchScrubbing = false;
   private readonly options: ChartsManagerOptions;
 
   // Hover states
@@ -341,6 +342,7 @@ export class MortgageChartsManager {
       'touchmove',
       (e) => {
         clearTimeout(this.touchHideTimer);
+        this.isTouchScrubbing = true;
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
@@ -898,13 +900,23 @@ export class MortgageChartsManager {
     this.tooltipEl.style.top = `${Math.round(y)}px`;
   }
 
-  private hideTooltip() {
+  private hideTooltip(redraw = false) {
+    const hadHover =
+      this.hoverBalancePeriod !== null ||
+      this.hoverLifetimeSegment !== null ||
+      this.hoverCashFlowYearIdx !== null ||
+      this.hoverCashFlowCategory !== null ||
+      Object.values(this.insightHover).some((v) => v !== null);
     this.tooltipEl.hidden = true;
     this.hoverBalancePeriod = null;
     this.hoverLifetimeSegment = null;
     this.hoverCashFlowYearIdx = null;
     this.hoverCashFlowCategory = null;
     Object.keys(this.insightHover).forEach((k) => (this.insightHover[k] = null));
+    if (redraw && hadHover) {
+      const slide = this.slides[this.activeIndex];
+      if (slide) this.drawSlide(slide);
+    }
   }
 
   // =========================================================================
@@ -935,8 +947,12 @@ export class MortgageChartsManager {
       const total = a.plan.rows.length;
       if (total === 0) return;
       const step = Math.max(1, a.plan.periodsPerYear);
-      const cur = this.hoverBalancePeriod ?? 1;
-      const next = Math.max(1, Math.min(total, cur + delta * step));
+      const next =
+        this.hoverBalancePeriod === null
+          ? delta > 0
+            ? 1
+            : total
+          : Math.max(1, Math.min(total, this.hoverBalancePeriod + delta * step));
       this.hoverBalancePeriod = next;
       this.drawBalanceChart();
       const html = this.buildBalanceTooltipHtml(a, next);
@@ -1063,6 +1079,7 @@ export class MortgageChartsManager {
       'touchstart',
       (e) => {
         this.flushDirtySlides();
+        this.isTouchScrubbing = false;
         if (e.touches[0]) {
           touchStartX = e.touches[0].clientX;
           touchStartY = e.touches[0].clientY;
@@ -1075,6 +1092,10 @@ export class MortgageChartsManager {
     this.viewport.addEventListener(
       'touchend',
       (e) => {
+        if (this.isTouchScrubbing) {
+          this.isTouchScrubbing = false;
+          return;
+        }
         if (!e.changedTouches[0]) return;
         const deltaX = e.changedTouches[0].clientX - touchStartX;
         const deltaY = e.changedTouches[0].clientY - touchStartY;
@@ -1118,9 +1139,7 @@ export class MortgageChartsManager {
           }
         }
       } else if (e.key === 'Escape') {
-        this.hideTooltip();
-        const slide = this.slides[this.activeIndex];
-        if (slide) this.drawSlide(slide);
+        this.hideTooltip(true);
       }
     });
 
@@ -1165,7 +1184,7 @@ export class MortgageChartsManager {
     });
 
     // Hide tooltip on tap outside or window scroll
-    window.addEventListener('scroll', () => this.hideTooltip(), { passive: true });
+    window.addEventListener('scroll', () => this.hideTooltip(true), { passive: true });
   }
 
   // =========================================================================
@@ -1238,9 +1257,14 @@ export class MortgageChartsManager {
       const targetYear = ratio * maxYears;
       const targetPeriod = Math.max(1, Math.round(targetYear * a.plan.periodsPerYear));
       const nextPeriod = Math.min(a.plan.rows.length, targetPeriod);
+      const clampedRow = a.plan.rows[nextPeriod - 1];
+      const tipClientX =
+        targetPeriod > a.plan.rows.length && clampedRow
+          ? rect.left + dims.padding.left + (clampedRow.n / a.plan.periodsPerYear / maxYears) * dims.plotWidth
+          : clientX;
 
       if (nextPeriod === this.hoverBalancePeriod) {
-        this.showTooltip(clientX, clientY, this.tooltipEl.innerHTML);
+        this.showTooltip(tipClientX, clientY, this.tooltipEl.innerHTML);
         return;
       }
 
@@ -1249,7 +1273,7 @@ export class MortgageChartsManager {
 
       const html = this.buildBalanceTooltipHtml(a, this.hoverBalancePeriod);
       if (html) {
-        this.showTooltip(clientX, clientY, html);
+        this.showTooltip(tipClientX, clientY, html);
       }
     };
 
@@ -1266,6 +1290,7 @@ export class MortgageChartsManager {
       'touchmove',
       (e) => {
         clearTimeout(this.touchHideTimer);
+        this.isTouchScrubbing = true;
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
@@ -1404,6 +1429,7 @@ export class MortgageChartsManager {
       'touchmove',
       (e) => {
         clearTimeout(this.touchHideTimer);
+        this.isTouchScrubbing = true;
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }
@@ -1513,6 +1539,7 @@ export class MortgageChartsManager {
       'touchmove',
       (e) => {
         clearTimeout(this.touchHideTimer);
+        this.isTouchScrubbing = true;
         if (e.touches[0]) handleMove(e.touches[0].clientX, e.touches[0].clientY);
       },
       { passive: true }

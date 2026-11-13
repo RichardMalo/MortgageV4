@@ -180,7 +180,8 @@ const RESET_STRATEGY: Partial<MortgageInputs> = {
   frequency: 'monthly',
   extraMonthly: 0,
   annualLumpSum: 0,
-  paymentIncreaseEnabled: false
+  paymentIncreaseEnabled: false,
+  customPayment: 0
 };
 
 const describeStrategy = (
@@ -527,13 +528,31 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
     const cur = series[i]!;
     const diff = cur.principal - cur.interest;
     if (diff >= 0) {
-      crossYear = i + 1;
-      const startRowOfTipYear = i * perYear + 1;
+      const firstRowOfCurYear = s.rows[i * perYear];
+      const sustainedFromPrevYear =
+        i > 0 &&
+        Boolean(
+          firstRowOfCurYear && firstRowOfCurYear.principal + firstRowOfCurYear.extra >= firstRowOfCurYear.interest
+        );
+      let startRowOfTipYear = i * perYear + 1;
+      if (sustainedFromPrevYear) {
+        const prevYearStart = (i - 1) * perYear + 1;
+        const prevYearEnd = i * perYear;
+        for (let rIdx = prevYearEnd - 1; rIdx >= prevYearStart - 1; rIdx--) {
+          const r = s.rows[rIdx];
+          if (r && r.principal + r.extra >= r.interest) {
+            startRowOfTipYear = r.n;
+          } else {
+            break;
+          }
+        }
+      }
       const tipRow =
         s.rows.find((r) => r.n >= startRowOfTipYear && r.principal + r.extra >= r.interest) ||
         s.rows.find((r) => r.principal + r.extra >= r.interest) ||
         s.rows[Math.min(s.rows.length - 1, (i + 1) * perYear - 1)];
       crossRowIndex = tipRow ? tipRow.n : Math.min(s.rows.length, (i + 1) * perYear);
+      crossYear = Math.ceil(crossRowIndex / perYear);
       crossDate = tipRow
         ? tipRow.date
         : paymentDate(parseDate(startDate), Math.max(1, Math.round((i + 0.5) * 12)), 'monthly');
@@ -706,7 +725,11 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
       const tipMonth =
         tipInfo.crossRowIndex ?? Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
       const tipDate = tipInfo.crossDate ?? yTip.endDate;
+      const tipRow = plan.rows[tipMonth - 1];
       const yTipPrincipal = round2(yTip.principal + yTip.extra);
+      const useRowSplit = yTipPrincipal < yTip.interest && Boolean(tipRow);
+      const subPrincipal = useRowSplit ? round2(tipRow!.principal + tipRow!.extra) : yTipPrincipal;
+      const subInterest = useRowSplit ? tipRow!.interest : yTip.interest;
       milestones.push({
         key: 'tipping',
         title: 'Tipping Point',
@@ -716,7 +739,7 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
         monthIndex: tipMonth,
         dateStr: formatMonthYear(tipDate, c),
         mainMetric: 'Principal > Interest',
-        subMetric: `${money(yTipPrincipal)} vs ${money(yTip.interest)}`,
+        subMetric: `${money(subPrincipal)} vs ${money(subInterest)}`,
         descText:
           tipMonth <= 1
             ? 'From Day 1, your payments build more equity than bank interest.'

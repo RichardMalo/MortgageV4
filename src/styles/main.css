@@ -1327,7 +1327,7 @@ input[type='number']::-webkit-outer-spin-button {
   scrollbar-width: none;
   display: flex;
   align-items: flex-start;
-  touch-action: pan-y pinch-zoom;
+  touch-action: pan-x pan-y pinch-zoom;
   overscroll-behavior-x: contain;
   outline: none;
 }
@@ -2751,7 +2751,7 @@ select:focus-visible {
     display: block !important;
   }
 
-  details.schedule > * {
+  details.schedule > :not(.schedule-actions):not([hidden]) {
     display: block !important;
   }
 
