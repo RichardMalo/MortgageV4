@@ -657,7 +657,7 @@ export const costOfWaiting = (
 // ---------------------------------------------------------------------------
 
 export interface MilestoneData {
-  key: 'term' | 'tipping' | 'half' | 'free';
+  key: 'term' | 'tipping-extra' | 'tipping' | 'half' | 'free';
   title: string;
   pillClass: string;
   icon: string;
@@ -671,7 +671,14 @@ export interface MilestoneData {
   pipMobile: string;
 }
 
-/** Computes up to 4 landmark milestones (5-Yr Term, Tipping Point, 50% Equity, Mortgage-Free). */
+/**
+ * Computes up to 5 landmark milestones:
+ * 1. 5-Yr Term
+ * 2. Extra Tipping (Prin + Extra > Int, when extra payments pull the crossover ahead of base principal)
+ * 3. Base Tipping / Tipping Point (Scheduled Principal > Interest)
+ * 4. 50% Equity
+ * 5. Mortgage-Free
+ */
 export const buildMilestones = (a: Analysis): MilestoneData[] => {
   const { plan, inputs: inp } = a;
   const c = inp.country;
@@ -684,6 +691,10 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
 
   const tipInfo = tippingPoint(plan, inp.startDate);
   const tippingYear = tipInfo.crossYear ?? -1;
+  const basePmt = plan.basePayment ?? plan.regularPayment;
+  const baseTipRow = plan.rows.find(
+    (r) => r.principal >= r.interest && round2(basePmt - r.interest) >= r.interest
+  );
   let halfEquityYear = -1;
 
   for (const yr of a.years) {
@@ -718,35 +729,98 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
     }
   }
 
-  // 2. Tipping Point (unified with Tipping Point chart & exact payment row date)
+  // 2. Tipping Point(s): differentiate Extra Tipping (Prin + Extra > Int) vs Base Tipping (Principal > Interest)
   if (tippingYear > 0) {
     const yTip = a.years.find((y) => y.year === tippingYear);
     if (yTip) {
-      const tipMonth =
+      const totalTipMonth =
         tipInfo.crossRowIndex ?? Math.min(plan.rows.length, tippingYear * plan.periodsPerYear);
-      const tipDate = tipInfo.crossDate ?? yTip.endDate;
-      const tipRow = plan.rows[tipMonth - 1];
-      const yTipPrincipal = round2(yTip.principal + yTip.extra);
-      const useRowSplit = yTipPrincipal < yTip.interest && Boolean(tipRow);
-      const subPrincipal = useRowSplit ? round2(tipRow!.principal + tipRow!.extra) : yTipPrincipal;
-      const subInterest = useRowSplit ? tipRow!.interest : yTip.interest;
-      milestones.push({
-        key: 'tipping',
-        title: 'Tipping Point',
-        pillClass: 'milestone-pill-tipping',
-        icon: '⚖',
-        year: tippingYear,
-        monthIndex: tipMonth,
-        dateStr: formatMonthYear(tipDate, c),
-        mainMetric: 'Principal > Interest',
-        subMetric: `${money(subPrincipal)} vs ${money(subInterest)}`,
-        descText:
-          tipMonth <= 1
-            ? 'From Day 1, your payments build more equity than bank interest.'
-            : 'Equity inflection point: payments build equity faster than bank interest.',
-        badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
-        pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
-      });
+      const totalTipDate = tipInfo.crossDate ?? yTip.endDate;
+      const totalTipRow = plan.rows[totalTipMonth - 1];
+      const hasDualTipping = Boolean(totalTipRow && baseTipRow && totalTipRow.n < baseTipRow.n);
+
+      if (hasDualTipping && totalTipRow && baseTipRow) {
+        const isLumpSumRow =
+          inp.annualLumpSum > 0 &&
+          totalTipRow.n % plan.periodsPerYear === 0 &&
+          round2(totalTipRow.principal + totalTipRow.extra - inp.annualLumpSum) < totalTipRow.interest;
+        const subTotalPrincipal = isLumpSumRow
+          ? round2(yTip.principal + yTip.extra)
+          : round2(totalTipRow.principal + totalTipRow.extra);
+        const subTotalInterest = isLumpSumRow ? yTip.interest : totalTipRow.interest;
+        milestones.push({
+          key: 'tipping-extra',
+          title: 'Extra Tipping',
+          pillClass: 'milestone-pill-tipping-extra',
+          icon: '⚡',
+          year: tippingYear,
+          monthIndex: totalTipMonth,
+          dateStr: formatMonthYear(totalTipDate, c),
+          mainMetric: 'Prin + Extra > Int',
+          subMetric: `${money(subTotalPrincipal)} vs ${money(subTotalInterest)}`,
+          descText:
+            totalTipMonth <= 1
+              ? 'From Day 1, principal + extra payments exceed bank interest.'
+              : 'With extra payments, total equity built exceeds bank interest.',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping-extra">Extra Tip ⚡</span>',
+          pipMobile: '<span class="milestone-pip pip-tipping-extra" title="Extra Tipping (Prin + Extra > Int)">⚡</span>'
+        });
+
+        const baseTipYear = Math.ceil(baseTipRow.n / plan.periodsPerYear);
+        milestones.push({
+          key: 'tipping',
+          title: 'Base Tipping',
+          pillClass: 'milestone-pill-tipping',
+          icon: '⚖',
+          year: baseTipYear,
+          monthIndex: baseTipRow.n,
+          dateStr: formatMonthYear(baseTipRow.date, c),
+          mainMetric: 'Principal > Interest',
+          subMetric: `${money(baseTipRow.principal)} vs ${money(baseTipRow.interest)}`,
+          descText: 'Core crossover: base principal alone now exceeds bank interest.',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping">Base Tip ⚖</span>',
+          pipMobile: '<span class="milestone-pip pip-tipping" title="Base Tipping (Principal > Interest)">⚖</span>'
+        });
+      } else if (baseTipRow) {
+        const baseTipYear = Math.ceil(baseTipRow.n / plan.periodsPerYear);
+        milestones.push({
+          key: 'tipping',
+          title: 'Tipping Point',
+          pillClass: 'milestone-pill-tipping',
+          icon: '⚖',
+          year: baseTipYear,
+          monthIndex: baseTipRow.n,
+          dateStr: formatMonthYear(baseTipRow.date, c),
+          mainMetric: 'Principal > Interest',
+          subMetric: `${money(baseTipRow.principal)} vs ${money(baseTipRow.interest)}`,
+          descText:
+            baseTipRow.n <= 1
+              ? 'From Day 1, your payments build more equity than bank interest.'
+              : 'Equity inflection point: payments build equity faster than bank interest.',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping">Tipping ⚖</span>',
+          pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
+        });
+      } else if (totalTipRow) {
+        const subTotalPrincipal = round2(totalTipRow.principal + totalTipRow.extra);
+        const subTotalInterest = totalTipRow.interest;
+        milestones.push({
+          key: 'tipping-extra',
+          title: 'Extra Tipping',
+          pillClass: 'milestone-pill-tipping-extra',
+          icon: '⚡',
+          year: tippingYear,
+          monthIndex: totalTipMonth,
+          dateStr: formatMonthYear(totalTipDate, c),
+          mainMetric: 'Prin + Extra > Int',
+          subMetric: `${money(subTotalPrincipal)} vs ${money(subTotalInterest)}`,
+          descText:
+            totalTipMonth <= 1
+              ? 'From Day 1, principal + extra payments exceed bank interest.'
+              : 'With extra payments, total equity built exceeds bank interest.',
+          badgeDesktop: '<span class="milestone-badge milestone-tipping-extra">Extra Tip ⚡</span>',
+          pipMobile: '<span class="milestone-pip pip-tipping-extra" title="Extra Tipping (Prin + Extra > Int)">⚡</span>'
+        });
+      }
     }
   }
 

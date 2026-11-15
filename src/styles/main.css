@@ -1777,6 +1777,7 @@ input[type='number']::-webkit-outer-spin-button {
   margin: 14px 0 16px;
   border-bottom: 1px solid var(--border-subtle);
   padding-bottom: 14px;
+  container-type: inline-size;
 }
 
 .milestones-showcase-header {
@@ -1932,7 +1933,8 @@ input[type='number']::-webkit-outer-spin-button {
   text-overflow: ellipsis;
 }
 
-.milestone-card-tipping .metric-main {
+.milestone-card-tipping .metric-main,
+.milestone-card-tipping-extra .metric-main {
   font-size: 0.72rem;
   letter-spacing: -0.02em;
 }
@@ -2001,6 +2003,35 @@ input[type='number']::-webkit-outer-spin-button {
   border: 1px solid rgba(37, 99, 235, 0.22);
 }
 
+.milestone-card-tipping-extra {
+  border-top: 1.5px solid #0891b2;
+}
+html[data-theme='dark'] .milestone-card-tipping-extra {
+  border-top-color: #22d3ee;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .milestone-card-tipping-extra {
+    border-top-color: #22d3ee;
+  }
+}
+.milestone-pill-tipping-extra {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.24);
+}
+html[data-theme='dark'] .milestone-pill-tipping-extra {
+  background: rgba(34, 211, 238, 0.14);
+  color: #22d3ee;
+  border-color: rgba(34, 211, 238, 0.3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .milestone-pill-tipping-extra {
+    background: rgba(34, 211, 238, 0.14);
+    color: #22d3ee;
+    border-color: rgba(34, 211, 238, 0.3);
+  }
+}
+
 .milestone-card-tipping {
   border-top: 1.5px solid var(--good);
 }
@@ -2008,6 +2039,69 @@ input[type='number']::-webkit-outer-spin-button {
   background: var(--good-soft);
   color: var(--good);
   border: 1px solid rgba(5, 150, 105, 0.22);
+}
+
+/* 5-Landmark Couture Density (PC 5-across snug & proportional fit) */
+.milestones-showcase[data-cols="5"] {
+  gap: 6px;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card {
+  padding: 8px 7.5px 7px;
+  gap: 4px;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-top {
+  gap: 2.5px;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-tag {
+  font-size: clamp(0.47rem, 1.24cqi, 0.54rem);
+  letter-spacing: 0.025em;
+  padding: 1.5px 3.5px;
+  gap: 2px;
+  max-width: calc(100% - 22px);
+}
+
+.milestones-showcase[data-cols="5"] .milestone-tag-glyph {
+  font-size: clamp(0.54rem, 1.32cqi, 0.6rem);
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-target {
+  font-size: clamp(0.5rem, 1.28cqi, 0.57rem);
+  letter-spacing: 0.02em;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-date {
+  font-size: clamp(0.75rem, 1.98cqi, 0.84rem);
+}
+
+.milestones-showcase[data-cols="5"] .metric-main,
+.milestones-showcase[data-cols="5"] .milestone-card-tipping .metric-main,
+.milestones-showcase[data-cols="5"] .milestone-card-tipping-extra .metric-main {
+  font-size: clamp(0.62rem, 1.66cqi, 0.7rem);
+  letter-spacing: -0.025em;
+}
+
+.milestones-showcase[data-cols="5"] .metric-sub {
+  font-size: clamp(0.54rem, 1.44cqi, 0.6rem);
+  letter-spacing: -0.01em;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-desc {
+  font-size: clamp(0.56rem, 1.48cqi, 0.61rem);
+  line-height: 1.3;
+  min-height: 2.6em;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-foot {
+  font-size: clamp(0.48rem, 1.28cqi, 0.54rem);
+  letter-spacing: 0.02em;
+  padding-top: 4px;
+}
+
+.milestones-showcase[data-cols="5"] .milestone-card-arrow {
+  font-size: 0.6rem;
 }
 
 .milestone-card-half {
@@ -2152,6 +2246,18 @@ tbody tr:hover {
   border-left: 3px solid var(--primary);
 }
 
+.milestone-row.row-milestone-tipping-extra {
+  border-left: 3px solid #0891b2;
+}
+html[data-theme='dark'] .milestone-row.row-milestone-tipping-extra {
+  border-left-color: #22d3ee;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .milestone-row.row-milestone-tipping-extra {
+    border-left-color: #22d3ee;
+  }
+}
+
 .milestone-row.row-milestone-tipping {
   border-left: 3px solid var(--good);
 }
@@ -2190,6 +2296,24 @@ tbody tr:hover {
   background: var(--primary-soft);
   color: var(--primary);
   border: 1px solid rgba(37, 99, 235, 0.2);
+}
+
+.milestone-tipping-extra {
+  background: rgba(8, 145, 178, 0.1);
+  color: #0891b2;
+  border: 1px solid rgba(8, 145, 178, 0.22);
+}
+html[data-theme='dark'] .milestone-tipping-extra {
+  background: rgba(34, 211, 238, 0.14);
+  color: #22d3ee;
+  border-color: rgba(34, 211, 238, 0.28);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .milestone-tipping-extra {
+    background: rgba(34, 211, 238, 0.14);
+    color: #22d3ee;
+    border-color: rgba(34, 211, 238, 0.28);
+  }
 }
 
 .milestone-tipping {
@@ -2507,8 +2631,9 @@ select:focus-visible {
     width: 18%;
   }
 
-  /* Mobile Milestone Horizons: 2x2 fit-to-screen grid (no side scrolling) */
-  .milestones-showcase {
+  /* Mobile Milestone Horizons: 2x2 fit-to-screen grid + full-width finale card for 3 or 5 landmarks */
+  .milestones-showcase,
+  .milestones-showcase[data-cols="5"] {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     overflow: visible;
@@ -2517,10 +2642,96 @@ select:focus-visible {
     margin: 0;
   }
 
-  .milestone-card {
+  .milestone-card,
+  .milestones-showcase[data-cols="5"] .milestone-card {
     flex: none;
     min-width: 0;
     padding: 7px 8px 6px;
+    gap: 4px;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-tag {
+    font-size: 0.56rem;
+    letter-spacing: 0.04em;
+    padding: 1.5px 5px;
+    gap: 3px;
+    max-width: 82%;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-tag-glyph {
+    font-size: 0.64rem;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-card-target {
+    font-size: 0.6rem;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-card-date {
+    font-size: 0.84rem;
+  }
+
+  .milestones-showcase[data-cols="5"] .metric-main,
+  .milestones-showcase[data-cols="5"] .milestone-card-tipping .metric-main,
+  .milestones-showcase[data-cols="5"] .milestone-card-tipping-extra .metric-main {
+    font-size: 0.72rem;
+    letter-spacing: -0.02em;
+  }
+
+  .milestones-showcase[data-cols="5"] .metric-sub {
+    font-size: 0.61rem;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-card-desc {
+    font-size: 0.62rem;
+    line-height: 1.3;
+    min-height: 2.6em;
+  }
+
+  .milestones-showcase[data-cols="5"] .milestone-card-foot {
+    font-size: 0.56rem;
+    padding-top: 4px;
+  }
+
+  /* When 3 or 5 landmarks exist on mobile, the culminating Mortgage-Free card spans full width cleanly */
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-areas:
+      "top top"
+      "date metric"
+      "desc desc"
+      "foot foot";
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 3px;
+    padding: 7px 10px 6px;
+  }
+
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-top {
+    grid-area: top;
+  }
+
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-date {
+    grid-area: date;
+  }
+
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-metric {
+    grid-area: metric;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-desc {
+    grid-area: desc;
+    -webkit-line-clamp: 1;
+    min-height: 1.3em;
+  }
+
+  .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-foot {
+    grid-area: foot;
+    margin-top: 1px;
   }
 
   /* Table Milestone Mobile Overrides */
@@ -2552,6 +2763,24 @@ select:focus-visible {
     background: var(--primary-soft);
     color: var(--primary);
     border: 1px solid rgba(37, 99, 235, 0.3);
+  }
+
+  .pip-tipping-extra {
+    background: rgba(8, 145, 178, 0.14);
+    color: #0891b2;
+    border: 1px solid rgba(8, 145, 178, 0.32);
+  }
+  html[data-theme='dark'] .pip-tipping-extra {
+    background: rgba(34, 211, 238, 0.16);
+    color: #22d3ee;
+    border-color: rgba(34, 211, 238, 0.36);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .pip-tipping-extra {
+      background: rgba(34, 211, 238, 0.16);
+      color: #22d3ee;
+      border-color: rgba(34, 211, 238, 0.36);
+    }
   }
 
   .pip-tipping {

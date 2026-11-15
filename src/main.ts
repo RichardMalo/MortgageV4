@@ -382,6 +382,7 @@ const renderMilestonesShowcase = (milestones: MilestoneData[]) => {
     countEl.textContent = `${milestones.length} Landmark${milestones.length === 1 ? '' : 's'}`;
   }
   container.style.setProperty('--milestone-cols', String(Math.max(1, milestones.length)));
+  container.dataset.cols = String(milestones.length);
   const isMonthly = scheduleView === 'monthly';
 
   container.innerHTML = milestones

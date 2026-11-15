@@ -318,10 +318,16 @@ describe('Scenario & Decision Math Engine', () => {
       expect(midTip.crossYears).toBeGreaterThan(0);
 
       const midMilestones = buildMilestones(midYear1);
-      const midTipMilestone = midMilestones.find((m) => m.key === 'tipping');
-      expect(midTipMilestone?.descText).toBe(
-        'Equity inflection point: payments build equity faster than bank interest.'
+      const midExtraTip = midMilestones.find((m) => m.key === 'tipping-extra');
+      expect(midExtraTip).toBeDefined();
+      expect(midExtraTip?.mainMetric).toBe('Prin + Extra > Int');
+      expect(midExtraTip?.descText).toBe(
+        'With extra payments, total equity built exceeds bank interest.'
       );
+      const midBaseTip = midMilestones.find((m) => m.key === 'tipping');
+      expect(midBaseTip).toBeDefined();
+      expect(midBaseTip?.mainMetric).toBe('Principal > Interest');
+      expect(midBaseTip?.monthIndex).toBeGreaterThan(midExtraTip!.monthIndex);
 
       // True Day-1 crossover: payment #1 already has principal >= interest
       const day1 = analyzeMortgage({
@@ -423,6 +429,42 @@ describe('Scenario & Decision Math Engine', () => {
       });
       const oneYearMilestones = buildMilestones(oneYearAnalysis);
       expect(oneYearMilestones.map((m) => m.key)).toEqual(['tipping', 'half', 'free']);
+    });
+
+    it('differentiates Extra Tipping (Prin + Extra > Int) and Base Tipping (Principal > Interest) into 5 landmarks when extra payments pull crossover ahead', () => {
+      const dualTipAnalysis = analyzeMortgage({
+        country: 'CA',
+        homePrice: 770_000,
+        downPayment: 35_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'monthly',
+        paymentIncreaseEnabled: true,
+        customPayment: 7500
+      });
+      const milestones = buildMilestones(dualTipAnalysis);
+      expect(milestones.map((m) => m.key)).toEqual([
+        'term',
+        'tipping-extra',
+        'tipping',
+        'half',
+        'free'
+      ]);
+
+      const extraTip = milestones.find((m) => m.key === 'tipping-extra')!;
+      const baseTip = milestones.find((m) => m.key === 'tipping')!;
+      expect(extraTip.title).toBe('Extra Tipping');
+      expect(extraTip.mainMetric).toBe('Prin + Extra > Int');
+      expect(extraTip.monthIndex).toBe(1);
+      expect(extraTip.descText).toContain('From Day 1');
+
+      expect(baseTip.title).toBe('Base Tipping');
+      expect(baseTip.mainMetric).toBe('Principal > Interest');
+      expect(baseTip.monthIndex).toBeGreaterThan(extraTip.monthIndex);
+
+      // Verify baseTip row genuinely has base scheduled principal >= interest
+      const baseRow = dualTipAnalysis.plan.rows[baseTip.monthIndex - 1]!;
+      expect(baseRow.principal).toBeGreaterThanOrEqual(baseRow.interest);
     });
   });
 });
