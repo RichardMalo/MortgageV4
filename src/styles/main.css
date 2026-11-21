@@ -61,6 +61,7 @@
 
 /* Explicit Dark Theme */
 html[data-theme='dark'] {
+  color-scheme: dark;
   --bg: #090b10;
   --bg-subtle: #0e1117;
   --card: #11141c;
@@ -103,6 +104,7 @@ html[data-theme='dark'] {
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
+    color-scheme: dark;
     --bg: #090b10;
     --bg-subtle: #0e1117;
     --card: #11141c;
@@ -146,6 +148,7 @@ html[data-theme='dark'] {
 
 /* Force light theme when user explicitly chose light */
 html[data-theme='light'] {
+  color-scheme: light;
   --bg: #f8f9fa;
   --bg-subtle: #f1f3f5;
   --card: #ffffff;
@@ -378,7 +381,7 @@ html[data-theme='dark'] .icon-moon {
   margin: 0 auto;
   padding: 12px 24px 48px;
   display: grid;
-  grid-template-columns: minmax(330px, 400px) 1fr;
+  grid-template-columns: clamp(344px, 34vw, 396px) minmax(0, 1fr);
   gap: 24px;
   align-items: start;
   overflow-x: clip;
@@ -430,6 +433,13 @@ html[data-theme='dark'] .icon-moon {
   gap: 16px;
 }
 
+.inputs > div[data-show='purchase'],
+.inputs > div[data-show='existing'] {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
 @media (max-width: 890px) {
   .inputs {
     position: static;
@@ -447,24 +457,32 @@ html[data-theme='dark'] .icon-moon {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.field-header label {
+  white-space: nowrap;
 }
 
 .field label {
   font-size: 0.82rem;
   font-weight: 500;
   letter-spacing: 0.01em;
+  line-height: 1.35;
   color: var(--muted);
 }
 
 .row-2 {
   display: flex;
+  align-items: flex-end;
   gap: 12px;
 }
 
 @media (max-width: 520px) {
   .row-2:not(:has(.pct)) {
     flex-direction: column;
+    align-items: stretch;
     gap: 12px;
   }
 }
@@ -557,9 +575,11 @@ textarea {
 select {
   appearance: none;
   -webkit-appearance: none;
+  -moz-appearance: none;
   height: var(--control-h);
   min-height: var(--control-h);
   max-height: var(--control-h);
+  line-height: calc(var(--control-h) - 2px);
   box-sizing: border-box;
   background-color: var(--input);
   border: 1px solid var(--border);
@@ -571,6 +591,12 @@ select {
   background-position: right 14px center;
   background-size: 12px 12px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+select option {
+  line-height: normal;
+  background-color: var(--card);
+  color: var(--text);
 }
 
 select:hover:not(:focus) {
@@ -589,6 +615,7 @@ input[type='date'],
   height: var(--control-h);
   min-height: var(--control-h);
   max-height: var(--control-h);
+  line-height: 1;
   box-sizing: border-box;
   background-color: var(--input);
   border: 1px solid var(--border);
@@ -596,9 +623,14 @@ input[type='date'],
   padding: 0 14px;
   cursor: pointer;
   text-align: left;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+input[type='date']::-webkit-datetime-edit {
+  padding: 0;
+  line-height: 1;
 }
 
 input[type='date']:hover:not(:focus) {
@@ -670,9 +702,13 @@ input[type='number']::-webkit-outer-spin-button {
 .quick-pills {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
-  margin-top: 6px;
+  margin-top: 4px;
+}
+
+.amort-pills {
+  margin-top: -6px;
 }
 
 .quick-pill-label {
@@ -692,7 +728,7 @@ input[type='number']::-webkit-outer-spin-button {
   font-size: 0.75rem;
   font-weight: 600;
   min-height: 26px;
-  padding: 3px 10px;
+  padding: 3px 9px;
   border-radius: var(--radius-pill);
   cursor: pointer;
   transition: all 0.15s ease;
@@ -755,9 +791,12 @@ input[type='number']::-webkit-outer-spin-button {
 }
 
 .hint {
-  margin: -4px 0 0;
+  margin: 8px 0 0;
   font-size: 0.78rem;
   color: var(--muted);
+}
+.inputs > .hint {
+  margin-top: -6px;
 }
 .hint:empty {
   display: none;
@@ -941,6 +980,7 @@ input[type='number']::-webkit-outer-spin-button {
 .hero-currency {
   font-size: clamp(1.8rem, 4.5vw, 2.5rem);
   font-weight: 700;
+  line-height: 1.2;
   opacity: 0.9;
 }
 
@@ -952,6 +992,7 @@ input[type='number']::-webkit-outer-spin-button {
   font-family: inherit;
   font-size: clamp(1.8rem, 4.5vw, 2.5rem);
   font-weight: 700;
+  line-height: 1.2;
   letter-spacing: -0.03em;
   padding: 2px 10px;
   width: 220px;
@@ -1080,7 +1121,7 @@ input[type='number']::-webkit-outer-spin-button {
   padding: 16px 18px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
 }
 
 .stat-label {
@@ -1188,6 +1229,7 @@ input[type='number']::-webkit-outer-spin-button {
   row-gap: 10px;
   align-items: center;
   margin-bottom: 12px;
+  container-type: inline-size;
 }
 
 .chart-title-group {
@@ -1276,6 +1318,19 @@ input[type='number']::-webkit-outer-spin-button {
   border-color: var(--border-hover);
   background-color: var(--card);
   transform: scale(1.08);
+}
+
+@container (max-width: 580px) {
+  .chart-tabs {
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+  .chart-tab-btn {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 0.75rem;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1568,6 +1623,12 @@ input[type='number']::-webkit-outer-spin-button {
   color: var(--muted);
 }
 
+.legend > span,
+.bar-legend > span {
+  display: inline-flex;
+  align-items: center;
+}
+
 .legend-note {
   font-size: 0.76rem;
   color: var(--muted);
@@ -1596,11 +1657,11 @@ input[type='number']::-webkit-outer-spin-button {
 
 .swatch {
   display: inline-block;
+  flex-shrink: 0;
   width: 10px;
   height: 10px;
   border-radius: 3px;
   margin-right: 6px;
-  vertical-align: middle;
 }
 
 .swatch.plan,
@@ -1868,15 +1929,15 @@ input[type='number']::-webkit-outer-spin-button {
 .milestone-tag {
   display: inline-flex;
   align-items: center;
-  gap: 3.5px;
-  font-size: 0.58rem;
+  gap: 3px;
+  font-size: 0.56rem;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
-  padding: 1.5px 5px;
+  padding: 1.5px 4.5px;
   border-radius: 4px;
   min-width: 0;
-  max-width: 80%;
+  max-width: calc(100% - 26px);
 }
 
 .milestone-tag-glyph {
@@ -1927,7 +1988,8 @@ input[type='number']::-webkit-outer-spin-button {
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums lining-nums;
-  line-height: 1.2;
+  line-height: 15px;
+  min-height: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1943,7 +2005,8 @@ input[type='number']::-webkit-outer-spin-button {
   font-size: 0.63rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums lining-nums;
-  line-height: 1.2;
+  line-height: 12px;
+  min-height: 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2056,8 +2119,8 @@ html[data-theme='dark'] .milestone-pill-tipping-extra {
 }
 
 .milestones-showcase[data-cols="5"] .milestone-tag {
-  font-size: clamp(0.47rem, 1.24cqi, 0.54rem);
-  letter-spacing: 0.025em;
+  font-size: clamp(0.45rem, 1.12cqi, 0.52rem);
+  letter-spacing: 0.015em;
   padding: 1.5px 3.5px;
   gap: 2px;
   max-width: calc(100% - 22px);
@@ -2131,6 +2194,103 @@ html[data-theme='dark'] .milestone-pill-free {
     background: rgba(16, 185, 129, 0.16);
     color: #34d399;
     border-color: rgba(52, 211, 153, 0.32);
+  }
+}
+
+@media screen {
+  @container (max-width: 520px) {
+    .milestones-showcase,
+    .milestones-showcase[data-cols="5"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-card {
+      padding: 9px 10px 8px;
+      gap: 5px;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-tag {
+      font-size: 0.56rem;
+      letter-spacing: 0.03em;
+      padding: 1.5px 5px;
+      gap: 3px;
+      max-width: calc(100% - 28px);
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-tag-glyph {
+      font-size: 0.64rem;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-card-target {
+      font-size: 0.62rem;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-card-date {
+      font-size: 0.88rem;
+    }
+
+    .milestones-showcase[data-cols="5"] .metric-main,
+    .milestones-showcase[data-cols="5"] .milestone-card-tipping .metric-main,
+    .milestones-showcase[data-cols="5"] .milestone-card-tipping-extra .metric-main {
+      font-size: 0.74rem;
+    }
+
+    .milestones-showcase[data-cols="5"] .metric-sub {
+      font-size: 0.63rem;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-card-desc {
+      font-size: 0.64rem;
+      line-height: 1.32;
+      min-height: 2.64em;
+    }
+
+    .milestones-showcase[data-cols="5"] .milestone-card-foot {
+      font-size: 0.58rem;
+      padding-top: 5px;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      grid-template-areas:
+        "top top"
+        "date metric"
+        "desc desc"
+        "foot foot";
+      align-items: baseline;
+      column-gap: 10px;
+      row-gap: 3px;
+      padding: 8px 10px 7px;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-top {
+      grid-area: top;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-date {
+      grid-area: date;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-metric {
+      grid-area: metric;
+      flex-direction: row;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-desc {
+      grid-area: desc;
+      -webkit-line-clamp: 1;
+      min-height: 1.32em;
+    }
+
+    .milestones-showcase .milestone-card:last-child:nth-child(odd) .milestone-card-foot {
+      grid-area: foot;
+      margin-top: 1px;
+    }
   }
 }
 
@@ -2521,13 +2681,22 @@ select:focus-visible {
   outline-offset: 2px;
 }
 
+.input-wrap input:focus-visible {
+  outline: none;
+}
+
+.input-wrap:has(:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* =========================================================================
    Mobile Optimization (Fit-to-screen with zero horizontal/vertical table scroll)
    ========================================================================= */
 
 @media (max-width: 640px) {
   .app-header {
-    padding: 14px 12px 6px;
+    padding: 14px 10px 6px;
   }
   .layout {
     padding: 8px 10px 32px;
