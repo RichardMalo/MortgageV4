@@ -86,6 +86,27 @@ describe('Scenario & Decision Math Engine', () => {
       expect(sweep.current.extraMonthly).toBe(200);
       expect(sweep.perDollar).toBeGreaterThan(0);
     });
+
+    it('keeps perDollar accurate when extraMonthly is combined with large annual lump sums', () => {
+      for (const extraMonthly of [200, 240]) {
+        const combo = analyzeMortgage({
+          country: 'CA',
+          homePrice: 770_000,
+          downPayment: 154_000,
+          annualRate: 5,
+          amortizationYears: 25,
+          frequency: 'monthly',
+          extraMonthly,
+          annualLumpSum: 30_000,
+          startDate: '2026-01-01'
+        });
+        const sweep = extraPaymentSweep(combo);
+        expect(sweep).not.toBeNull();
+        expect(sweep!.perDollar).not.toBeNull();
+        expect(sweep!.perDollar!).toBeGreaterThan(0.1);
+        expect(sweep!.perDollar!).toBeLessThan(1.0);
+      }
+    });
   });
 
   describe('strategyLeaderboard', () => {
@@ -465,6 +486,56 @@ describe('Scenario & Decision Math Engine', () => {
       // Verify baseTip row genuinely has base scheduled principal >= interest
       const baseRow = dualTipAnalysis.plan.rows[baseTip.monthIndex - 1]!;
       expect(baseRow.principal).toBeGreaterThanOrEqual(baseRow.interest);
+    });
+
+    it('keeps Extra Tipping sub-metric >= interest and crossYears aligned with crossRowIndex on lump-sum schedules', () => {
+      // Walk-back lump-sum crossover where prior full year still had annual principal+extra < interest
+      const walkBack = analyzeMortgage({
+        country: 'CA',
+        homePrice: 770_000,
+        downPayment: 154_000,
+        annualRate: 5.5,
+        amortizationYears: 30,
+        frequency: 'monthly',
+        annualLumpSum: 1_000,
+        startDate: '2026-01-01'
+      });
+      const walkBackTip = buildMilestones(walkBack).find((m) => m.key === 'tipping-extra');
+      expect(walkBackTip).toBeDefined();
+      const nums = (walkBackTip!.subMetric.match(/[\d,]+(\.\d+)?/g) ?? []).map((s) => Number(s.replace(/,/g, '')));
+      expect(nums.length).toBe(2);
+      expect(nums[0]!).toBeGreaterThanOrEqual(nums[1]!);
+
+      // Year 2 lump-sum crossover: crossYears must align with crossRowIndex (~1.92y, not < 1y)
+      const yr2Lump = analyzeMortgage({
+        country: 'CA',
+        mode: 'existing',
+        currentBalance: 400_000,
+        annualRate: 7,
+        amortizationYears: 40,
+        frequency: 'monthly',
+        annualLumpSum: 25_000,
+        startDate: '2026-01-01'
+      });
+      const yr2Tip = tippingPoint(yr2Lump.plan, yr2Lump.inputs.startDate);
+      expect(yr2Tip.crossYear).toBe(2);
+      expect(yr2Tip.crossYears).toBeCloseTo((yr2Tip.crossRowIndex! - 1) / yr2Lump.plan.periodsPerYear, 6);
+
+      // Single-milestone Extra Tipping (loan paid off by lump sum before baseTipRow is reached) uses annual totals
+      const singleExtraTipLoan = analyzeMortgage({
+        country: 'CA',
+        mode: 'existing',
+        currentBalance: 100_000,
+        annualRate: 7,
+        amortizationYears: 30,
+        frequency: 'monthly',
+        annualLumpSum: 100_000,
+        startDate: '2026-01-01'
+      });
+      const singleMilestones = buildMilestones(singleExtraTipLoan);
+      const singleEt = singleMilestones.find((m) => m.key === 'tipping-extra');
+      expect(singleEt).toBeDefined();
+      expect(singleEt!.subMetric).toContain('/yr');
     });
   });
 });

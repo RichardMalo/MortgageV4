@@ -123,7 +123,12 @@ const save = () => {
   }, 250);
 };
 
-const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, explicitRatio?: number) => {
+const update = (
+  patch: Partial<MortgageInputs>,
+  preserveEntryStrategy = false,
+  explicitRatio?: number,
+  forceInputs = false
+) => {
   state = { ...state, ...patch };
   if (explicitRatio !== undefined) {
     paymentIncreaseRatio = clamp(explicitRatio, 1, 2);
@@ -157,7 +162,7 @@ const update = (patch: Partial<MortgageInputs>, preserveEntryStrategy = false, e
   }
   clearUrlQueryIfPresent();
   save();
-  render();
+  render(forceInputs);
 };
 
 // ---------- theme management ----------
@@ -243,16 +248,16 @@ const currencySymbol = (country: Country) => {
   return sym;
 };
 
-const setField = (el: HTMLInputElement | HTMLSelectElement, value: string) => {
-  if (document.activeElement !== el && el.value !== value) el.value = value;
+const setField = (el: HTMLInputElement | HTMLSelectElement, value: string, force = false) => {
+  if ((force || document.activeElement !== el) && el.value !== value) el.value = value;
 };
 
 const fmtNum = (n: number) => (Number.isFinite(n) ? String(Math.round(n * 100) / 100) : '');
 
-const syncDownPct = () => {
+const syncDownPct = (force = false) => {
   const pct = state.homePrice > 0 ? (state.downPayment / state.homePrice) * 100 : 0;
   const rounded = Math.round(pct * 100) / 100;
-  setField($<HTMLInputElement>('in-down-pct'), fmtNum(rounded));
+  setField($<HTMLInputElement>('in-down-pct'), fmtNum(rounded), force);
 
   // Sync active state of down payment micro-pills
   for (const pill of getDownPctPills()) {
@@ -268,15 +273,15 @@ const syncAmortPills = () => {
   }
 };
 
-/** Writes state into every form control (skipping the one being typed in). */
-const syncForm = () => {
+/** Writes state into every form control (skipping the one being typed in unless forced). */
+const syncForm = (force = false) => {
   for (const el of getFormKeyControls()) {
     const key = el.dataset.key as keyof MortgageInputs;
     const v = state[key];
     const isOptionalZero = typeof v === 'number' && v === 0 && el.getAttribute('placeholder') === '0';
-    setField(el, isOptionalZero ? '' : typeof v === 'number' ? fmtNum(v) : String(v));
+    setField(el, isOptionalZero ? '' : typeof v === 'number' ? fmtNum(v) : String(v), force);
   }
-  syncDownPct();
+  syncDownPct(force);
   syncAmortPills();
 };
 
@@ -497,7 +502,7 @@ const renderScheduleRows = (a: Analysis, milestones: MilestoneData[]) => {
 
 // ---------- rendering ----------
 
-const render = () => {
+const render = (forceInputs = false) => {
   syncVisibility();
   const a = analyzeMortgage(state);
   lastAnalysis = a;
@@ -514,10 +519,10 @@ const render = () => {
     if (inp.mode === 'purchase' && inp.homePrice > 0) {
       const ltv = ((inp.homePrice - inp.downPayment) / inp.homePrice) * 100;
       let status = 'Conventional';
-      if (ltv > 80) {
-        if (a.insurance.kind === 'cmhc') status = 'Insured (CMHC)';
+      if (ltv > 80 + 1e-7) {
+        if (c === 'CA' && inp.downPayment + 0.5 < canadianMinimumDown(inp.homePrice)) status = 'Below Min Down';
+        else if (a.insurance.kind === 'cmhc') status = 'Insured (CMHC)';
         else if (a.insurance.kind === 'pmi') status = 'PMI Required';
-        else if (c === 'CA' && inp.downPayment + 0.5 < canadianMinimumDown(inp.homePrice)) status = 'Below Min Down';
         else status = 'High LTV';
       }
       ltvBadge.textContent = `${ltv.toFixed(1)}% LTV · ${status}`;
@@ -561,7 +566,7 @@ const render = () => {
       if (customInput) {
         customInput.min = String(a.basePayment);
         customInput.max = String(a.maxPayment);
-        setField(customInput, fmtNum(currentVal));
+        setField(customInput, fmtNum(currentVal), forceInputs);
       }
       $('hero-min-payment').textContent = money(a.basePayment, true);
       $('hero-max-payment').textContent = money(a.maxPayment, true);
@@ -654,15 +659,15 @@ const render = () => {
         const previousEntryRatio = entryPaymentIncreaseRatio;
         const previousRatio = paymentIncreaseRatio;
         const fromStrategies = chartId === 'strategies';
-        update(action.patch, fromStrategies);
-        syncForm();
+        update(action.patch, fromStrategies, undefined, true);
+        syncForm(true);
         showToast(action.message, {
           actionLabel: 'Undo',
           onAction: () => {
             entryStrategy = previousEntry;
             entryPaymentIncreaseRatio = previousEntryRatio;
-            update(previousState, true, previousRatio);
-            syncForm();
+            update(previousState, true, previousRatio, true);
+            syncForm(true);
             showToast('Reverted strategy change');
           }
         });
@@ -908,8 +913,8 @@ const bind = () => {
       if (Number.isFinite(pct) && state.homePrice > 0) {
         const down = Math.round((state.homePrice * pct) / 100);
         update({ downPayment: down });
-        setField($<HTMLInputElement>('in-down'), String(down));
-        syncDownPct();
+        setField($<HTMLInputElement>('in-down'), String(down), true);
+        syncDownPct(true);
       }
     });
   });
@@ -920,7 +925,7 @@ const bind = () => {
       const years = parseInt(pill.dataset.amort || '0', 10);
       if (years >= 1 && years <= 40) {
         update({ amortizationYears: years });
-        setField($<HTMLInputElement>('in-amort'), String(years));
+        setField($<HTMLInputElement>('in-amort'), String(years), true);
         syncAmortPills();
       }
     });
@@ -930,13 +935,13 @@ const bind = () => {
   $('btn-rate-minus')?.addEventListener('click', () => {
     const nextRate = Math.max(0, Math.round((state.annualRate - 0.25) * 100) / 100);
     update({ annualRate: nextRate });
-    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate));
+    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate), true);
   });
 
   $('btn-rate-plus')?.addEventListener('click', () => {
     const nextRate = Math.min(30, Math.round((state.annualRate + 0.25) * 100) / 100);
     update({ annualRate: nextRate });
-    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate));
+    setField($<HTMLInputElement>('in-rate'), fmtNum(nextRate), true);
   });
 
   // Mode switcher (click + WAI-ARIA radiogroup keyboard navigation)
@@ -987,6 +992,12 @@ const bind = () => {
           nextBtn.focus();
           selectScheduleView(view);
         }
+      }
+    });
+    btn.addEventListener('keyup', (e) => {
+      if (e.key === ' ') {
+        e.preventDefault();
+        e.stopPropagation();
       }
     });
   });
@@ -1073,8 +1084,8 @@ const bind = () => {
     if (lastAnalysis) {
       const val = calc(lastAnalysis.basePayment, lastAnalysis.maxPayment);
       const input = $<HTMLInputElement>('in-payment-increase');
-      if (input) setField(input, fmtNum(val));
-      update({ customPayment: val }, false, ratio);
+      if (input) setField(input, fmtNum(val), true);
+      update({ customPayment: val }, false, ratio, true);
     }
   };
 
@@ -1099,15 +1110,15 @@ const bind = () => {
     entryStrategy = extractStrategyInputs(state);
     clearUrlQueryIfPresent();
     save();
-    syncForm();
-    render();
+    syncForm(true);
+    render(true);
     showToast('Parameters reset to default', {
       actionLabel: 'Undo',
       onAction: () => {
         entryStrategy = previousEntry;
         entryPaymentIncreaseRatio = previousEntryRatio;
-        update(previousState, true, previousRatio);
-        syncForm();
+        update(previousState, true, previousRatio, true);
+        syncForm(true);
         syncCostsSectionOpen();
         showToast('Restored previous parameters');
       }
@@ -1161,6 +1172,7 @@ let printPrepared = false;
 let scheduleWasClosedBeforePrint = false;
 
 const prepareForPrint = () => {
+  if (printPrepared) return;
   const details = document.querySelector<HTMLDetailsElement>('details.schedule');
   if (details && !details.open) {
     scheduleWasClosedBeforePrint = true;

@@ -393,7 +393,11 @@ export const computeBasePayment = (
     const ltv = homePrice > 0 ? base / homePrice : 0;
     loanAmount = base;
     if (region.insurance === 'cmhc' && homePrice > 0 && base > 0) {
-      const rate = homePrice < CMHC_MAX_PRICE ? cmhcPremiumRate(ltv, inputs.amortizationYears) : null;
+      const meetsMinDown = downPayment + 0.5 >= canadianMinimumDown(homePrice);
+      const rate =
+        homePrice < CMHC_MAX_PRICE && meetsMinDown
+          ? cmhcPremiumRate(ltv, inputs.amortizationYears)
+          : null;
       if (rate !== null) {
         loanAmount = round2(base + round2(base * rate));
       }
@@ -500,13 +504,17 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
 
     if (region.insurance === 'cmhc' && homePrice > 0 && base > 0) {
       const minDown = canadianMinimumDown(homePrice);
-      if (downPayment + 0.5 < minDown) {
+      const meetsMinDown = downPayment + 0.5 >= minDown;
+      if (!meetsMinDown) {
         notes.push({
           level: 'error',
           text: `In Canada the minimum down payment for a ${money(homePrice)} home is ${money(minDown)}.`
         });
       }
-      const rate = homePrice < CMHC_MAX_PRICE ? cmhcPremiumRate(ltv, inputs.amortizationYears) : null;
+      const rate =
+        homePrice < CMHC_MAX_PRICE && meetsMinDown
+          ? cmhcPremiumRate(ltv, inputs.amortizationYears)
+          : null;
       if (rate !== null) {
         insurance.kind = 'cmhc';
         insurance.premiumRate = rate;
@@ -532,7 +540,7 @@ export const analyzeMortgage = (raw: Partial<MortgageInputs>): Analysis => {
       }
     }
 
-    if (region.insurance === 'pmi' && ltv > 0.8 && inputs.pmiRate > 0) {
+    if (region.insurance === 'pmi' && ltv > 0.8 + 1e-9 && inputs.pmiRate > 0) {
       insurance.kind = 'pmi';
       insurance.pmiMonthly = round2((loanAmount * inputs.pmiRate) / 100 / 12);
     }

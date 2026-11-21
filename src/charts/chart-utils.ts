@@ -178,15 +178,16 @@ export const getNiceTicks = (maxValue: number, maxTicks = 5): number[] => {
 export const formatCompactMoney = (val: number, country: Country = 'CA'): string => {
   const r = REGIONS[country] || REGIONS.CA;
   const sym = r.currency === 'GBP' ? '£' : '$';
-  if (!Number.isFinite(val) || val === 0) return `${sym}0`;
-  const sign = val < 0 ? '−' : '';
+  if (!Number.isFinite(val)) return `${sym}0`;
   const abs = Math.abs(val);
+  if (abs < 0.5) return `${sym}0`;
+  const sign = val < 0 ? '−' : '';
 
   if (abs >= 999_950) {
     const m = Math.round((abs / 1_000_000) * 10) / 10;
     return `${sign}${sym}${m % 1 === 0 ? m.toFixed(0) : m.toFixed(1)}M`;
   }
-  if (abs >= 1_000) {
+  if (abs >= 999.5) {
     const k = Math.round((abs / 1_000) * 10) / 10;
     return `${sign}${sym}${k % 1 === 0 ? k.toFixed(0) : k.toFixed(1)}k`;
   }

@@ -68,7 +68,7 @@ export const computeInsights = (a: Analysis, entryStrategy?: StrategyInputs): In
     a.inputs.extraMonthly > 0 ||
     a.inputs.annualLumpSum > 0 ||
     a.paymentIncrease > 0;
-  const waitingIsExample = !hasActivePrepay || a.interestSaved < 1;
+  const waitingIsExample = !hasActivePrepay;
 
   let sweepVal: ExtraSweep | null | undefined;
   let strategiesVal: Strategy[] | undefined;
@@ -158,9 +158,9 @@ const money = (a: Analysis, x: number) => formatMoney(x, a.inputs.country);
 const compact = (a: Analysis, x: number) => formatCompactMoney(x, a.inputs.country);
 const b = (s: string) => `<strong>${s}</strong>`;
 
-/** Calendar date `years` after the first payment. */
+/** Calendar date at `years` of payments (1-based: first payment is at `startDate`). */
 const dateAfter = (a: Analysis, years: number): Date =>
-  addMonthsClamped(parseDate(a.inputs.startDate), Math.round(years * 12));
+  addMonthsClamped(parseDate(a.inputs.startDate), Math.max(0, Math.round(years * 12) - 1));
 const monthYear = (a: Analysis, dt: Date | null) => formatMonthYear(dt, a.inputs.country);
 
 const lastOf = <T>(arr: T[]): T => arr[arr.length - 1]!;
@@ -174,6 +174,15 @@ const strokePath = (
 ) => {
   if (pts.length === 0) return;
   ctx.save();
+  if (pts.length === 1) {
+    const [x, y] = pts[0]!;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, Math.max(3, width * 1.4), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    return;
+  }
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
   ctx.lineJoin = 'round';
@@ -223,7 +232,7 @@ const KEPT_SAMPLES = 120;
 
 const keptGeom = (dims: ChartDims, a: Analysis, d: InsightData) => {
   const maxYears = Math.max(lastOf(d.baseCum.years), lastOf(d.planCum.years), 1);
-  const ticks = getNiceTicks(Math.max(a.baseline.totalInterest, 1), 5);
+  const ticks = getNiceTicks(Math.max(a.baseline.totalInterest, a.plan.totalInterest, 1), 5);
   const maxY = lastOf(ticks);
   return {
     maxYears,
@@ -264,7 +273,9 @@ export const keptChart: InsightChart = {
       }
       for (let i = KEPT_SAMPLES; i >= 0; i--) {
         const t = g.sampleT(i);
-        ctx.lineTo(g.getX(t), g.getY(cumulativeAt(d.planCum, t)));
+        const baseVal = cumulativeAt(d.baseCum, t);
+        const planVal = cumulativeAt(d.planCum, t);
+        ctx.lineTo(g.getX(t), g.getY(Math.min(baseVal, planVal)));
       }
       ctx.closePath();
       ctx.fillStyle = colors.extraSoft;
@@ -276,16 +287,21 @@ export const keptChart: InsightChart = {
     strokePath(ctx, seriesPts(d.planCum, g.maxYears), colors.interestColor, 2.6);
 
     if (a.hasStrategy) {
-      // Debt-free marker
-      const payoffX = g.getX(lastOf(d.planCum.years));
-      guideLine(ctx, payoffX, dims, colors);
-      drawPill(ctx, 'Debt-free', payoffX, dims.padding.top + 16, colors.accentColor, '#ffffff', dims);
+      const planYears = lastOf(d.planCum.years);
+      const baseYears = lastOf(d.baseCum.years);
+      const finishesEarly = planYears < baseYears - 1e-6;
+      const payoffX = g.getX(planYears);
+      if (finishesEarly) {
+        // Debt-free marker
+        guideLine(ctx, payoffX, dims, colors);
+        drawPill(ctx, 'Debt-free', payoffX, dims.padding.top + 16, colors.accentColor, '#ffffff', dims);
+      }
 
       // Total kept label at the right edge
       if (a.interestSaved >= 1) {
         const yMid = (g.getY(a.baseline.totalInterest) + g.getY(a.plan.totalInterest)) / 2;
         const rightX = dims.padding.left + dims.plotWidth - 50;
-        const pillY = payoffX > rightX - 65 ? Math.max(dims.padding.top + 38, yMid + 9) : yMid + 9;
+        const pillY = finishesEarly && payoffX > rightX - 65 ? Math.max(dims.padding.top + 38, yMid + 9) : yMid + 9;
         drawPill(
           ctx,
           `+${compact(a, a.interestSaved)} kept`,
@@ -382,8 +398,16 @@ export const tippingChart: InsightChart = {
     drawMoneyGrid(ctx, dims, colors, g.ticks, g.maxY, a.inputs.country);
     drawYearAxis(ctx, dims, colors, g.maxYears);
 
-    const pts = (s: YearSplit[], key: 'interest' | 'principal') =>
-      s.map((p) => [g.getX(p.x), g.getY(p[key])] as [number, number]);
+    const pts = (s: YearSplit[], key: 'interest' | 'principal'): Array<[number, number]> => {
+      if (s.length === 1) {
+        const y = g.getY(s[0]![key]);
+        return [
+          [g.getX(0), y],
+          [g.getX(Math.min(1, g.maxYears)), y]
+        ];
+      }
+      return s.map((p) => [g.getX(p.x), g.getY(p[key])] as [number, number]);
+    };
 
     if (a.hasStrategy) {
       ctx.save();
@@ -453,7 +477,9 @@ export const tippingChart: InsightChart = {
     const p = d.planTip.series[i];
     const base = d.baseTip.series[i];
     const share = (s: YearSplit) => Math.round((s.principal / Math.max(1, s.principal + s.interest)) * 100);
-    const year = a.years[i]?.endDate.getFullYear() ?? dateAfter(a, i).getFullYear();
+    const year =
+      a.years[i]?.endDate.getFullYear() ??
+      addMonthsClamped(parseDate(a.inputs.startDate), (i + 1) * 12 - 1).getFullYear();
     if (!p) {
       return `
         <div class="tip-header">Year ${i + 1} <span class="tip-sub">· ${year}</span></div>
@@ -660,8 +686,9 @@ export const extraChart: InsightChart = {
     if (s.current.extraMonthly <= 0) {
       return `Adding just ${b(`${nudge}/mo`)} saves ${b(money(a, gain))} and ${b(formatDuration(gainMonths))}. Tap the curve to try any amount.`;
     }
+    const extraSaved = Math.max(0, s.current.interestSaved - (s.points[0]?.interestSaved ?? 0));
     const perDollar = s.perDollar !== null ? ` — every ${money(a, 1)} you prepay saves ${b(formatMoney(s.perDollar, a.inputs.country, true))}` : '';
-    return `Your ${b(`${money(a, s.current.extraMonthly)}/mo`)} extra saves ${b(money(a, s.current.interestSaved))}${perDollar}. Another ${b(
+    return `Your ${b(`${money(a, s.current.extraMonthly)}/mo`)} extra saves ${b(money(a, extraSaved))}${perDollar}. Another ${b(
       nudge
     )} would save ${b(money(a, gain))} more and ${b(formatDuration(gainMonths))}.`;
   },
@@ -982,7 +1009,7 @@ export const waitingChart: InsightChart = {
       <div class="tip-row good"><span>Interest saved:</span> <strong>${money(a, p.interestSaved)}</strong></div>
       <div class="tip-row plan"><span>Time saved:</span> <strong>${formatDuration(p.monthsSaved)}</strong></div>
       ${p.lostSavings > 0 ? `<div class="tip-divider"></div><div class="tip-row interest"><span>Cost of waiting:</span> <strong>${money(a, p.lostSavings)}</strong></div>` : ''}
-      ${d.waitingIsExample && i === 0 ? tipCta(`Click to start +${money(a, EXAMPLE_EXTRA)}/mo now`) : ''}
+      ${d.waitingIsExample && i === 0 && a.inputs.extraMonthly < EXAMPLE_EXTRA ? tipCta(`Click to start +${money(a, EXAMPLE_EXTRA)}/mo now`) : ''}
     `;
   },
 
@@ -999,11 +1026,11 @@ export const waitingChart: InsightChart = {
     return `${prefix}${body.charAt(0).toUpperCase()}${body.slice(1)}. Your next payment is the cheapest time to start.`;
   },
 
-  isClickable: (_a, d) => d.waitingIsExample && d.waiting.length > 0,
+  isClickable: (a, d) => d.waitingIsExample && d.waiting.length > 0 && a.inputs.extraMonthly < EXAMPLE_EXTRA,
   itemCount: (_a, d) => d.waiting.length,
 
   apply(i, a, d) {
-    if (!d.waitingIsExample || i !== 0) return null;
+    if (!d.waitingIsExample || i !== 0 || a.inputs.extraMonthly >= EXAMPLE_EXTRA) return null;
     return {
       patch: { extraMonthly: EXAMPLE_EXTRA },
       message: `Started +${money(a, EXAMPLE_EXTRA)}/month extra — nice!`

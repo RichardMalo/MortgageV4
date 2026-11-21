@@ -5,6 +5,7 @@ import {
   buildSchedule,
   canadianMinimumDown,
   cmhcPremiumRate,
+  computeBasePayment,
   parseUrlInputs,
   paymentDate,
   periodicRate,
@@ -237,9 +238,19 @@ describe('Canada', () => {
     expect(a.notes.some((n) => n.level === 'error' && n.text.includes('limited to a 30-year amortization'))).toBe(true);
   });
 
-  it('flags a down payment below the legal minimum', () => {
+  it('flags a down payment below the legal minimum and does not add CMHC insurance', () => {
     const a = analyzeMortgage(base({ homePrice: 800_000, downPayment: 40_000 }));
     expect(a.notes.some((n) => n.level === 'error')).toBe(true);
+    expect(a.insurance.kind).toBe('none');
+    expect(a.insurance.premium).toBe(0);
+    expect(a.loanAmount).toBe(760_000);
+
+    // Default $770k Canadian home with 5% down ($38,500 < $52,000 minimum)
+    const belowMin = analyzeMortgage(base({ homePrice: 770_000, downPayment: 38_500, amortizationYears: 30 }));
+    expect(belowMin.insurance.kind).toBe('none');
+    expect(belowMin.loanAmount).toBe(731_500);
+    expect(belowMin.notes.some((n) => n.level === 'error' && n.text.includes('52,000'))).toBe(true);
+    expect(computeBasePayment(belowMin.inputs).loanAmount).toBe(731_500);
   });
 });
 

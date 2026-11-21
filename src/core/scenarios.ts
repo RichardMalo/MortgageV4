@@ -129,8 +129,27 @@ export const extraPaymentSweep = (a: Analysis, steps = 20, nudge = 100): ExtraSw
     : null;
 
   const zero = points[0]!;
-  const prepaidDelta = current.totalPrepaid - zero.totalPrepaid;
-  const perDollar = cur > 0 && prepaidDelta > 0 ? (current.interestSaved - zero.interestSaved) / prepaidDelta : null;
+  const extraInterestSaved = round2(Math.max(0, current.interestSaved - zero.interestSaved));
+  let extraMonthlyPaid = 0;
+  if (cur > 0) {
+    const extraPerPeriod = (cur * 12) / perYear;
+    const lump = Math.max(0, a.inputs.annualLumpSum);
+    const inc = Math.max(0, a.paymentIncrease);
+    for (const r of a.plan.rows) {
+      if (r.extra <= 0) continue;
+      const plannedOther = inc + (r.n % perYear === 0 ? lump : 0);
+      const plannedTotal = extraPerPeriod + plannedOther;
+      if (plannedOther <= 0) {
+        extraMonthlyPaid += r.extra;
+      } else if (r.extra >= round2(plannedTotal) - 0.01) {
+        extraMonthlyPaid += extraPerPeriod;
+      } else if (plannedTotal > 0) {
+        extraMonthlyPaid += r.extra * (extraPerPeriod / plannedTotal);
+      }
+    }
+    extraMonthlyPaid = round2(extraMonthlyPaid);
+  }
+  const perDollar = cur > 0 && extraMonthlyPaid > 0 ? extraInterestSaved / extraMonthlyPaid : null;
 
   return { points, current, next, nudge, step, maxExtra, capExtraMonthly, perDollar };
 };
@@ -556,14 +575,7 @@ export const tippingPoint = (s: ScheduleResult, startDate: string): TippingPoint
       crossDate = tipRow
         ? tipRow.date
         : paymentDate(parseDate(startDate), Math.max(1, Math.round((i + 0.5) * 12)), 'monthly');
-      if (i === 0) {
-        crossYears = crossRowIndex <= 1 ? 0 : (crossRowIndex - 1) / perYear;
-      } else {
-        const prev = series[i - 1]!;
-        const prevDiff = prev.principal - prev.interest;
-        const t = prevDiff === diff ? 0 : -prevDiff / (diff - prevDiff);
-        crossYears = prev.x + t * (cur.x - prev.x);
-      }
+      crossYears = crossRowIndex <= 1 ? 0 : (crossRowIndex - 1) / perYear;
       break;
     }
   }
@@ -739,15 +751,20 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
       const totalTipRow = plan.rows[totalTipMonth - 1];
       const hasDualTipping = Boolean(totalTipRow && baseTipRow && totalTipRow.n < baseTipRow.n);
 
-      if (hasDualTipping && totalTipRow && baseTipRow) {
+      const extraTipSubMetric = (row: (typeof plan.rows)[number], yr: (typeof a.years)[number]): string => {
         const isLumpSumRow =
           inp.annualLumpSum > 0 &&
-          totalTipRow.n % plan.periodsPerYear === 0 &&
-          round2(totalTipRow.principal + totalTipRow.extra - inp.annualLumpSum) < totalTipRow.interest;
-        const subTotalPrincipal = isLumpSumRow
-          ? round2(yTip.principal + yTip.extra)
-          : round2(totalTipRow.principal + totalTipRow.extra);
-        const subTotalInterest = isLumpSumRow ? yTip.interest : totalTipRow.interest;
+          row.n % plan.periodsPerYear === 0 &&
+          round2(row.principal + row.extra - inp.annualLumpSum) < row.interest;
+        const useYearTotals = isLumpSumRow && round2(yr.principal + yr.extra) >= yr.interest;
+        const subTotalPrincipal = useYearTotals
+          ? round2(yr.principal + yr.extra)
+          : round2(row.principal + row.extra);
+        const subTotalInterest = useYearTotals ? yr.interest : row.interest;
+        return `${money(subTotalPrincipal)} vs ${money(subTotalInterest)}${useYearTotals ? '/yr' : ''}`;
+      };
+
+      if (hasDualTipping && totalTipRow && baseTipRow) {
         milestones.push({
           key: 'tipping-extra',
           title: 'Extra Tipping',
@@ -757,7 +774,7 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
           monthIndex: totalTipMonth,
           dateStr: formatMonthYear(totalTipDate, c),
           mainMetric: 'Prin + Extra > Int',
-          subMetric: `${money(subTotalPrincipal)} vs ${money(subTotalInterest)}`,
+          subMetric: extraTipSubMetric(totalTipRow, yTip),
           descText:
             totalTipMonth <= 1
               ? 'From Day 1, principal + extra payments exceed bank interest.'
@@ -801,8 +818,6 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
           pipMobile: '<span class="milestone-pip pip-tipping" title="Tipping Point">⚖</span>'
         });
       } else if (totalTipRow) {
-        const subTotalPrincipal = round2(totalTipRow.principal + totalTipRow.extra);
-        const subTotalInterest = totalTipRow.interest;
         milestones.push({
           key: 'tipping-extra',
           title: 'Extra Tipping',
@@ -812,7 +827,7 @@ export const buildMilestones = (a: Analysis): MilestoneData[] => {
           monthIndex: totalTipMonth,
           dateStr: formatMonthYear(totalTipDate, c),
           mainMetric: 'Prin + Extra > Int',
-          subMetric: `${money(subTotalPrincipal)} vs ${money(subTotalInterest)}`,
+          subMetric: extraTipSubMetric(totalTipRow, yTip),
           descText:
             totalTipMonth <= 1
               ? 'From Day 1, principal + extra payments exceed bank interest.'

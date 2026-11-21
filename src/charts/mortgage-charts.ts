@@ -100,10 +100,14 @@ export class MortgageChartsManager {
   private lastViewportWidth = 0;
   private resizeObserver: ResizeObserver | null = null;
   private isProgrammaticScrolling = false;
+  private isResizeSnapping = false;
   private programmaticScrollTimer: ReturnType<typeof setTimeout> | undefined;
   private scrollDebounceTimer: ReturnType<typeof setTimeout> | undefined;
   private touchHideTimer: ReturnType<typeof setTimeout> | undefined;
   private isTouchScrubbing = false;
+  private darkSchemeMql: MediaQueryList | null = null;
+  private onColorSchemeChange: (() => void) | null = null;
+  private onWindowScroll: (() => void) | null = null;
   private readonly options: ChartsManagerOptions;
 
   // Hover states
@@ -198,6 +202,7 @@ export class MortgageChartsManager {
     this.hasLoan = hasLoan;
     this.insightData = hasLoan ? computeInsights(analysis, entryStrategy) : null;
     this.totalExtra = analysis.years.reduce((sum, y) => sum + y.extra, 0);
+    this.hideTooltip(false);
 
     // Toggle baseline legend visibility on the balance slide
     if (this.baselineLegend) {
@@ -847,6 +852,19 @@ export class MortgageChartsManager {
     });
   }
 
+  private snapViewportInstant(targetLeft: number) {
+    if (!this.viewport) return;
+    this.isProgrammaticScrolling = true;
+    this.isResizeSnapping = true;
+    clearTimeout(this.scrollDebounceTimer);
+    clearTimeout(this.programmaticScrollTimer);
+    this.viewport.scrollTo({ left: targetLeft, behavior: 'instant' as ScrollBehavior });
+    this.programmaticScrollTimer = setTimeout(() => {
+      this.isProgrammaticScrolling = false;
+      this.isResizeSnapping = false;
+    }, 60);
+  }
+
   public toggleExpand() {
     this.isExpanded = !this.isExpanded;
     this.card.classList.toggle('expanded', this.isExpanded);
@@ -865,7 +883,7 @@ export class MortgageChartsManager {
       this.drawAll();
       // Keep viewport aligned with current slide
       const targetLeft = this.activeIndex * this.viewport.clientWidth;
-      this.viewport.scrollLeft = targetLeft;
+      this.snapViewportInstant(targetLeft);
     }, 150);
   }
 
@@ -901,6 +919,7 @@ export class MortgageChartsManager {
   }
 
   private hideTooltip(redraw = false) {
+    clearTimeout(this.touchHideTimer);
     const hadHover =
       this.hoverBalancePeriod !== null ||
       this.hoverLifetimeSegment !== null ||
@@ -1045,7 +1064,9 @@ export class MortgageChartsManager {
         if (this.viewport.scrollTop !== 0) {
           this.viewport.scrollTop = 0;
         }
-        this.flushDirtySlides();
+        if (!this.isResizeSnapping) {
+          this.flushDirtySlides();
+        }
         if (this.isProgrammaticScrolling) {
           clearTimeout(this.programmaticScrollTimer);
           const targetLeft = this.activeIndex * this.viewport.clientWidth;
@@ -1053,6 +1074,7 @@ export class MortgageChartsManager {
           this.programmaticScrollTimer = setTimeout(
             () => {
               this.isProgrammaticScrolling = false;
+              this.isResizeSnapping = false;
             },
             settled ? 30 : 140
           );
@@ -1164,12 +1186,13 @@ export class MortgageChartsManager {
           this.dirtySlides.add(s.id);
         }
       });
-      this.viewport.scrollLeft = this.activeIndex * width;
+      this.snapViewportInstant(this.activeIndex * width);
     });
     this.resizeObserver.observe(this.viewport);
 
     // System theme change listener
-    window.matchMedia?.('(prefers-color-scheme: dark)')?.addEventListener('change', () => {
+    this.darkSchemeMql = window.matchMedia?.('(prefers-color-scheme: dark)') ?? null;
+    this.onColorSchemeChange = () => {
       if (!document.documentElement.getAttribute('data-theme')) {
         const activeSlide = this.slides[this.activeIndex];
         this.slides.forEach((s) => {
@@ -1181,10 +1204,12 @@ export class MortgageChartsManager {
           }
         });
       }
-    });
+    };
+    this.darkSchemeMql?.addEventListener('change', this.onColorSchemeChange);
 
     // Hide tooltip on tap outside or window scroll
-    window.addEventListener('scroll', () => this.hideTooltip(true), { passive: true });
+    this.onWindowScroll = () => this.hideTooltip(true);
+    window.addEventListener('scroll', this.onWindowScroll, { passive: true });
   }
 
   // =========================================================================
@@ -1574,6 +1599,19 @@ export class MortgageChartsManager {
 
   public destroy() {
     this.resizeObserver?.disconnect();
+    this.resizeObserver = null;
+    if (this.onWindowScroll) {
+      window.removeEventListener('scroll', this.onWindowScroll);
+      this.onWindowScroll = null;
+    }
+    if (this.darkSchemeMql && this.onColorSchemeChange) {
+      this.darkSchemeMql.removeEventListener('change', this.onColorSchemeChange);
+      this.onColorSchemeChange = null;
+      this.darkSchemeMql = null;
+    }
+    clearTimeout(this.programmaticScrollTimer);
+    clearTimeout(this.scrollDebounceTimer);
+    clearTimeout(this.touchHideTimer);
   }
 }
 

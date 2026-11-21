@@ -53,6 +53,8 @@ describe('Chart Utilities', () => {
       expect(formatCompactMoney(1_500_000, 'UK')).toBe('£1.5M');
       expect(formatCompactMoney(-20_000, 'CA')).toBe('−$20k');
       expect(formatCompactMoney(-1_500_000, 'UK')).toBe('−£1.5M');
+      expect(formatCompactMoney(-0.1, 'CA')).toBe('$0');
+      expect(formatCompactMoney(999.6, 'CA')).toBe('$1k');
     });
   });
 
@@ -174,6 +176,72 @@ describe('Chart Utilities', () => {
       const accelIdx = accelData.strategies.findIndex((s) => s.id === 'accel-biweekly');
       expect(accelIdx).toBeGreaterThanOrEqual(0);
       expect(INSIGHT_CHARTS.strategies.apply?.(accelIdx, accel, accelData)).toBeNull();
+    });
+
+    it('reports incremental extraMonthly savings in Extra Impact caption when combined with other strategies', () => {
+      const combo = analyzeMortgage({
+        country: 'CA',
+        homePrice: 770_000,
+        downPayment: 154_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'accelerated-bi-weekly',
+        extraMonthly: 100,
+        annualLumpSum: 5_000,
+        startDate: '2026-01-01'
+      });
+      const data = computeInsights(combo);
+      const caption = INSIGHT_CHARTS.extra.caption(combo, data);
+      // $100/mo alone saves ~$12,971 (not the combined ~$152,168 of all strategies)
+      expect(caption).toContain('$12,971');
+      expect(caption).not.toContain('$152,168');
+    });
+
+    it('does not overwrite active extraMonthly to $100/mo on Cost of Waiting at 0% interest', () => {
+      const zeroRate = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 0,
+        amortizationYears: 25,
+        extraMonthly: 500
+      });
+      const data = computeInsights(zeroRate);
+      expect(data.waitingIsExample).toBe(false);
+      expect(INSIGHT_CHARTS.waiting.isClickable(zeroRate, data)).toBe(false);
+      expect(INSIGHT_CHARTS.waiting.apply?.(0, zeroRate, data)).toBeNull();
+    });
+
+    it('shows accurate calendar years on Tipping Point paid-off tooltips and Money Kept payoff tooltip', () => {
+      const midYear = analyzeMortgage({
+        country: 'CA',
+        homePrice: 770_000,
+        downPayment: 154_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'monthly',
+        extraMonthly: 500,
+        startDate: '2026-06-01'
+      });
+      const data = computeInsights(midYear);
+      const lastActiveIdx = midYear.years.length - 1;
+      const lastActiveTip = INSIGHT_CHARTS.tipping.tooltip(lastActiveIdx, midYear, data);
+      const paidOffTip = INSIGHT_CHARTS.tipping.tooltip(lastActiveIdx + 1, midYear, data);
+      expect(lastActiveTip).toContain('2046');
+      expect(paidOffTip).toContain('2047');
+
+      const jan25 = analyzeMortgage({
+        country: 'CA',
+        homePrice: 500_000,
+        downPayment: 100_000,
+        annualRate: 5,
+        amortizationYears: 25,
+        frequency: 'monthly',
+        startDate: '2026-01-01'
+      });
+      const keptData = computeInsights(jan25);
+      const endTip = INSIGHT_CHARTS.kept.tooltip(120, jan25, keptData);
+      expect(endTip).toContain('Dec 2050');
     });
   });
 });
